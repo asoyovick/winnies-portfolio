@@ -1,0 +1,37 @@
+# Next.js
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Data
+data/*.db
+data/*.db-*
+data/test*
+data/uploads/**
+
+# Auto-generated AI agent instructions
+AGENTS.md
+CLAUDE.md
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

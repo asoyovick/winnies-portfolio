@@ -1,0 +1,72 @@
+import { NextResponse } from 'next/server';
+import { adminCount } from '@/lib/auth';
+import { hashPassword } from '@/lib/auth';
+
+export const runtime = 'nodejs';
+
+/**
+ * One-time protected administrator creation over HTTP.
+ *
+ * Only works when no administrator exists yet and the request carries the
+ * ADMIN_SETUP_TOKEN (shared out of band, never committed). After the first
+ * administrator exists this endpoint always rejects.
+ */
+export async function POST(request: Request) {
+  const existing = adminCount();
+  if (existing > 0) {
+    return NextResponse.json(
+      { error: 'An administrator already exists. Setup is closed.' },
+      { status: 403 }
+    );
+  }
+
+  const expectedToken = process.env.ADMIN_SETUP_TOKEN;
+  if (!expectedToken) {
+    return NextResponse.json(
+      { error: 'Setup is not configured on the server.' },
+      { status: 500 }
+    );
+  }
+
+  const provided = request.headers.get('x-admin-setup-token') ?? '';
+  if (provided !== expectedToken) {
+    return NextResponse.json({ error: 'Invalid setup token.' }, { status: 401 });
+  }
+
+  let body: { email?: string; password?: string };
+  try {
+    body = (await request.json()) as { email?: string; password?: string };
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+  }
+
+  const email = String(body.email ?? '').trim().toLowerCase();
+  const password = String(body.password ?? '');
+
+  if (!email || !email.includes('@')) {
+    return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
+  }
+  if (!password || password.length < 10) {
+    return NextResponse.json(
+      { error: 'Password must be at least 10 characters.' },
+      { status: 400 }
+    );
+  }
+
+  const { getAdminByEmail } = await import('@/lib/auth');
+  if (getAdminByEmail(email)) {
+    return NextResponse.json({ error: 'An administrator with this email already exists.' }, { status: 409 });
+  }
+
+  const passwordHash = await hashPassword(password);
+  const { db } = await import('@/lib/db');
+  const now = new Date().toISOString();
+  db.prepare(
+    'INSERT INTO admins (email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?)'
+  ).run(email, passwordHash, now, now);
+
+  return NextResponse.json({
+    ok: true,
+    admin: { email },
+  });
+}
