@@ -41,3 +41,7 @@ tsconfig.tsbuildinfo
 
 # Design inspection output
 .taste-skill/
+.next-test/
+data/test-*.db*
+data/integration.db*
+data/test-uploads/

@@ -13,7 +13,10 @@ import { comparePassword, hashToken } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
-const LOGIN_LIMIT = { limit: 5, windowMs: 15 * 60 * 1000 }; // 5 attempts per 15 min per IP
+const LOGIN_LIMIT = {
+  limit: Number(process.env.LOGIN_RATE_LIMIT || 5),
+  windowMs: Number(process.env.LOGIN_RATE_WINDOW_MS || 15 * 60 * 1000),
+}; // 5 attempts per 15 min per IP by default
 
 export async function POST(request: Request) {
   if (!isConfigured()) {
