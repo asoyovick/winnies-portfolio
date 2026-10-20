@@ -76,16 +76,15 @@ export default function MediaPage() {
       );
     });
     setPending([]);
-    if (!uploaded.ok) {
-      setError(uploaded.error);
+    if (!uploaded.ok || !uploaded.data) {
+      setError(uploaded.error || 'The upload did not return a file.');
       return;
     }
 
     const result = await adminRequest('/api/media', {
       method: 'PUT',
       body: { id: asset.id, replacement_id: uploaded.data.id },
-    });
-    if (!result.ok) {
+    });    if (!result.ok) {
       setError(result.error);
       await load();
       return;
@@ -98,7 +97,10 @@ export default function MediaPage() {
     setError('');
     setNotice('');
 
-    const result = await adminRequest(`/api/media?id=${asset.id}`, { method: 'DELETE' });
+    const result = await adminRequest<{ references?: string[] }>(
+      `/api/media?id=${asset.id}`,
+      { method: 'DELETE' }
+    );
     if (result.ok) {
       setNotice(`Deleted ${asset.original_name}.`);
       await load();
