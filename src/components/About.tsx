@@ -3,31 +3,34 @@ import { Reveal } from './Reveal';
 
 export default function About() {
   const profile = getProfile();
-  const biography = profile?.biography || '';
+  const biography = (profile?.biography || '').trim();
+  const paragraphs = biography
+    .split('\n\n')
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
   return (
     <section id="about" className="section" aria-labelledby="about-heading">
-      <Reveal>
-        <h2 id="about-heading" className="section__head">About</h2>
-        <div className="about">
-          <p className="about__lead">
-            {profile?.display_name} is an accounting, audit and tax
-            professional based in Kisumu, Kenya.
-          </p>
-          <div className="about__text">
-            {biography.split('\n\n').map((paragraph, i) => (
-              <p key={i} className="about__para">
-                {paragraph}
-              </p>
+      <div className="wrap about__layout">
+        <div className="about__intro">
+          <Reveal>
+            <h2 id="about-heading" className="section__head">
+              About
+            </h2>
+            <p className="about__lead">
+              {profile?.display_name} is an accounting, audit and tax professional
+              based in {profile?.location}.
+            </p>
+          </Reveal>
+        </div>
+        <Reveal>
+          <div className="about__body">
+            {paragraphs.map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
             ))}
           </div>
-          <p className="about__close">
-            <span className="about__highlight">
-              Get in touch about your tax, audit or accounting needs.
-            </span>
-          </p>
-        </div>
-      </Reveal>
+        </Reveal>
+      </div>
     </section>
   );
 }

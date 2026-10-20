@@ -1,44 +1,135 @@
-import { getProfile } from '@/lib/content';
+import { getMediaAsset, getProfile } from '@/lib/content';
+import { parseJson } from '@/lib/validation';
 
+type SocialLink = { label: string; url: string };
+
+/**
+ * Site footer.
+ *
+ * Structure follows reference 3: a wide, light footer with clearly separated
+ * groups, a simple brand treatment and small legal text. Only contact details
+ * Winnie has approved for publication are shown.
+ */
 export default function Footer() {
   const profile = getProfile();
-  const socialLinks: { label: string; url: string }[] =
-    profile?.social_links ? Array.isArray(profile.social_links)
-      ? profile.social_links
-      : []
-      : [];
+
+  const socialLinks: SocialLink[] = parseJson<SocialLink[]>(
+    profile?.social_links ?? null,
+    []
+  );
+
+  const cvUrl = (() => {
+    if (!profile?.cv_media_id) return null;
+    const asset = getMediaAsset(profile.cv_media_id);
+    if (!asset) return null;
+    return `/api/media/${encodeURIComponent(asset.storage_name)}`;
+  })();
+
+  const name = profile?.display_name || 'Winnie Awuor Otieno';
 
   return (
     <footer className="site-footer" role="contentinfo">
-      <div className="footer__pad">
-        <p className="footer__invitation">
-          Get in touch about your tax, audit or accounting needs.
+      <div className="wrap">
+        <div className="footer__top">
+          <div className="footer__brand">
+            <p className="footer__brand-name">{name}</p>
+            <p className="footer__brand-role">{profile?.professional_title}</p>
+            {profile?.location ? (
+              <p className="footer__brand-location">{profile.location}</p>
+            ) : null}
+            <a href="/#contact" className="btn footer__button">
+              Get in touch
+            </a>
+          </div>
+
+          <div className="footer__groups">
+            <nav className="footer__group" aria-labelledby="footer-profile-heading">
+              <h2 id="footer-profile-heading" className="footer__group-title">
+                Profile
+              </h2>
+              <ul className="footer__group-list">
+                <li>
+                  <a href="/#about">About</a>
+                </li>
+                <li>
+                  <a href="/#experience">Experience</a>
+                </li>
+                <li>
+                  <a href="/#expertise">Expertise</a>
+                </li>
+              </ul>
+            </nav>
+
+            <nav className="footer__group" aria-labelledby="footer-resources-heading">
+              <h2 id="footer-resources-heading" className="footer__group-title">
+                Resources
+              </h2>
+              <ul className="footer__group-list">
+                <li>
+                  <a href="/#insights">Professional insights</a>
+                </li>
+                {cvUrl ? (
+                  <li>
+                    <a href={cvUrl} download>
+                      Download CV
+                    </a>
+                  </li>
+                ) : null}
+              </ul>
+            </nav>
+
+            <div className="footer__group">
+              <h2 className="footer__group-title">Contact</h2>
+              <ul className="footer__group-list">
+                {profile?.public_email ? (
+                  <li>
+                    <a href={`mailto:${profile.public_email}`}>{profile.public_email}</a>
+                  </li>
+                ) : null}
+                {profile?.public_phone ? (
+                  <li>
+                    <a href={`tel:${profile.public_phone.replace(/\s+/g, '')}`}>
+                      {profile.public_phone}
+                    </a>
+                  </li>
+                ) : null}
+                {socialLinks.map((link, index) => (
+                  <li key={`${link.label}-${index}`}>
+                    <a href={link.url} rel="noopener noreferrer" target="_blank">
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+                {profile?.public_email || profile?.public_phone || socialLinks.length > 0
+                  ? null
+                  : (
+                    <li className="footer__group-empty">
+                      Contact details are published on request.
+                    </li>
+                  )}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <p className="footer__mark" aria-hidden="true">
+          {name}
         </p>
-        <a href="#contact" className="footer__button">
-          Discuss a Service
-        </a>
-        {socialLinks.length > 0 && (
-          <ul className="footer__social" aria-label="Professional social links">
-            {socialLinks.map((link, i) => (
-              <li key={i}>
-                <a href={link.url} className="footer__social-link" rel="noreferrer" target="_blank">
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="footer__legal">
-          {profile?.display_name}&nbsp;—&nbsp;Accounting &amp; Tax Professional.
-          {profile?.location ? `&nbsp;·&nbsp;${profile.location}` : ''}
-        </p>
-        <p className="footer__name">
-          {profile?.display_name || 'Winnie Awuor Otieno'}
-        </p>
-        <p className="footer__copyright">
-          &copy; {new Date().getFullYear()} {profile?.display_name || 'Winnie Awuor Otieno'}.
-          All rights reserved.
-        </p>
+
+        <div className="footer__legal">
+          <p>
+            © {new Date().getFullYear()} {name}. All rights reserved.
+          </p>
+          <p>
+            Professional details are published for enquiries about accounting,
+            audit and tax work.
+          </p>
+          <p className="footer__credits">
+            Photographs of Kisumu by Victor Ochieng (CC BY-SA 2.0), Josep M.
+            Gracia (CC BY-SA 4.0) and Ggobanga (CC BY-SA 4.0), via Wikimedia
+            Commons.
+          </p>
+        </div>
       </div>
     </footer>
   );

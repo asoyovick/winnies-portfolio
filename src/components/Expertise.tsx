@@ -15,25 +15,30 @@ export default function Expertise() {
 
   return (
     <section id="expertise" className="section" aria-labelledby="expertise-heading">
-      <div className="expertise__wrap">
+      <div className="wrap">
         <Reveal>
-          <h2 id="expertise-heading" className="section__head">
-            Expertise
-          </h2>
+          <div className="expertise__head">
+            <h2 id="expertise-heading" className="section__head">
+              Expertise
+            </h2>
+            <p className="expertise__lead">
+              The areas I work in, and what each one covers.
+            </p>
+          </div>
+        </Reveal>
+        <Reveal>
           <div className="expertise__columns">
-            <nav className="expertise__index" aria-labelledby="expertise-heading">
-              {Object.entries(groups).map(([category, groupItems]) => (
-                <div key={category} className="expertise__group">
-                  <p className="expertise__group-label">{category}</p>
-                  {groupItems.map((item) => (
-                    <div key={item.id} className="expertise__row">
-                      <div className="expertise__title">{item.title}</div>
-                      <p className="expertise__desc">{item.description}</p>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </nav>
+            {Object.entries(groups).map(([category, groupItems]) => (
+              <div key={category} className="expertise__group">
+                <p className="expertise__group-label">{category}</p>
+                {groupItems.map((item) => (
+                  <div key={item.id} className="expertise__row">
+                    <h3 className="expertise__title">{item.title}</h3>
+                    <p className="expertise__desc">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         </Reveal>
       </div>
