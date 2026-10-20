@@ -47,9 +47,25 @@ footer; the full list is in `assets/credits.json`.
 The public design follows the `taste-skill` "Type and nothing else" direction
 (seed 594339630, sector finance), with the palette redrawn for the subject:
 a low-chroma stone ground, charcoal ink, a deep green accent and one dark
-field for the hero and the experience timeline. The admin panel follows the
-`taste-skill` app-screen rules: quiet chrome, colour only on data and the one
-primary action, flat surfaces, honest empty states, no emoji.
+field for the hero and the experience timeline. On the dark hero ground the
+accent switches to a muted gold (`--accent-bright`) so the one primary action
+carries the colour. The admin panel follows the `taste-skill` app-screen
+rules: quiet chrome, colour only on data and the one primary action, flat
+surfaces, honest empty states, no emoji.
+
+## The homepage hero
+
+The hero is a full-bleed picture that fills the screen: the statement sits
+over it at the top left, one primary action and a round arrow button follow,
+and a band across the foot of the screen carries the tagline, Winnie's
+position and the three main areas of work.
+
+The picture is **Winnie's own photograph** as soon as she uploads one in
+**Profile → Profile photograph** — it is then the background of the hero,
+positioned so she sits to the right of the statement. Until then the hero
+uses a photograph of Kisumu, the town her practice is based in, credited in
+the footer. No photograph of Winnie is invented, and no unrelated stock
+photography is used.
 
 House rules applied throughout: the headline never runs past two lines at any
 width, one type family, one accent, no gradients, no decorative rules, no

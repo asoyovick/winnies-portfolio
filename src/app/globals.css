@@ -19,6 +19,8 @@
   --muted: #5c5a50;
   --accent: #3d594c;
   --accent-ink: #ffffff;
+  /* The accent on the dark hero ground: a muted gold that carries the action. */
+  --accent-bright: #d8b45f;
   --field-1: #1f1c18;
   --field-1-ink: #f1f0ed;
 
@@ -220,6 +222,14 @@ select {
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }
+/* The action in the bar takes the hero's accent while the bar floats over it. */
+.site-header--over-hero .btn--nav {
+  background: var(--accent-bright);
+  color: #1f1c18;
+}
+.site-header--over-hero .btn--nav:hover {
+  background: #e3c47c;
+}
 
 .nav-inner {
   display: flex;
@@ -311,27 +321,67 @@ select {
 
 /* ============ Hero ============ */
 .hero {
-  background: var(--field-1);
-  color: var(--field-1-ink);
-  padding-block: clamp(5.5rem, 12vh, 8.5rem) clamp(2.5rem, 5vh, 3.5rem);
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: min(84vh, 880px);
+  gap: 3rem;
+  overflow: hidden;
+  background: var(--field-1);
+  color: #ffffff;
+  padding-top: calc(var(--nav-h) + clamp(1.5rem, 5vh, 3.5rem));
 }
 
-.hero__grid {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: clamp(2.5rem, 6vw, 4.5rem);
+.hero__media {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.hero__image {
+  object-fit: cover;
+  object-position: 68% center;
+}
+
+/* Scrim: keeps the statement readable over the picture. */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(16, 14, 12, 0.88) 0%,
+      rgba(16, 14, 12, 0.72) 32%,
+      rgba(16, 14, 12, 0.3) 62%,
+      rgba(16, 14, 12, 0.45) 100%
+    ),
+    linear-gradient(
+      0deg,
+      rgba(16, 14, 12, 0.9) 0%,
+      rgba(16, 14, 12, 0.5) 28%,
+      rgba(16, 14, 12, 0.12) 58%,
+      rgba(16, 14, 12, 0.4) 100%
+    );
+}
+
+.hero__content {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-bottom: clamp(1.5rem, 4vh, 3rem);
 }
 
 .hero__title {
-  font-size: clamp(2rem, 5.4vw, 4.7rem);
+  font-size: clamp(2.1rem, 6vw, 5.5rem);
   line-height: 0.98;
   letter-spacing: -0.035em;
-  margin-bottom: clamp(1.25rem, 2.5vw, 1.75rem);
+  color: #ffffff;
+  max-width: 15ch;
+  animation: heroLineIn 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .hero__title-line {
@@ -345,10 +395,10 @@ select {
 
 .hero__lead {
   font-size: var(--step-lead);
-  line-height: 1.4;
-  color: rgba(241, 240, 237, 0.76);
-  max-width: 46ch;
-  margin-bottom: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.86);
+  max-width: 42ch;
+  margin-top: clamp(1rem, 2vw, 1.5rem);
   animation: heroFadeUp 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: 140ms;
 }
@@ -356,102 +406,124 @@ select {
 .hero__actions {
   display: flex;
   align-items: center;
-  gap: clamp(1.25rem, 3vw, 2rem);
-  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: clamp(1.5rem, 3vw, 2.25rem);
   animation: heroFadeUp 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: 220ms;
 }
 
-.hero__secondary {
-  font-size: var(--step-small);
-  font-weight: 500;
-  color: var(--field-1-ink);
-  text-decoration: none;
-  padding-bottom: 2px;
-  border-bottom: 1px solid rgba(241, 240, 237, 0.3);
-  transition: border-color 160ms ease, color 160ms ease;
-}
-.hero__secondary:hover {
-  border-color: var(--field-1-ink);
-  color: var(--field-1-ink);
-}
-
-.hero__aside {
-  min-width: 0;
-}
-
-.hero__portrait {
-  margin: 0;
-}
-.hero__portrait-image {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 4 / 5;
-  object-fit: cover;
-  background: #2b2721;
-}
-
-.hero__panel {
-  background: rgba(241, 240, 237, 0.07);
-  padding: clamp(1.5rem, 3vw, 2.25rem);
-}
-.hero__panel-name {
-  font-size: var(--step-lead);
+/* The primary action: a filled pill on the dark ground. */
+.btn--pill {
+  background: var(--accent-bright);
+  color: #1f1c18;
+  padding: 0.85rem 1.75rem;
+  border-radius: 999px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  text-decoration: none;
+  transition: background-color 160ms ease, transform 160ms ease;
 }
-.hero__panel-title {
-  margin-top: 0.35rem;
-  color: rgba(241, 240, 237, 0.72);
-  font-size: var(--step-body);
-}
-.hero__panel-facts {
-  margin: clamp(1.5rem, 3vw, 2rem) 0 0;
-  display: grid;
-  gap: 1.1rem;
-}
-.hero__fact dt {
-  font-size: var(--step-small);
-  color: rgba(241, 240, 237, 0.55);
-}
-.hero__fact dd {
-  margin: 0.2rem 0 0;
-  font-size: var(--step-body);
+.btn--pill:hover {
+  background: #e3c47c;
+  transform: translateY(-1px);
 }
 
-/* Lower band: the main themes of the work (reference 2). */
-.hero__themes {
-  width: 100%;
-  margin-top: clamp(2.5rem, 6vh, 4rem);
+/* The round arrow that sits beside it. */
+.hero__circle {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--accent-bright);
+  color: #1f1c18;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+.hero__circle svg {
+  width: 20px;
+  height: 20px;
+}
+.hero__circle:hover {
+  background: #e3c47c;
+  transform: translateY(-1px);
+}
+
+/* The band at the foot of the screen. */
+.hero__foot {
+  position: relative;
+  background: rgba(16, 14, 12, 0.7);
+  padding-block: clamp(1.25rem, 3vh, 2rem) clamp(1.5rem, 3vh, 2.25rem);
+}
+
+.hero__foot-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem clamp(1.25rem, 2.5vw, 2rem);
   align-items: baseline;
-  list-style: none;
-  padding-left: 0;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+  margin-bottom: clamp(1rem, 2.5vh, 1.75rem);
 }
-.hero__themes li {
+
+.hero__tagline {
+  font-size: var(--step-lead);
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.hero__identity {
   display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: right;
 }
-.hero__themes a {
-  color: var(--field-1-ink);
+.hero__identity-name {
+  font-weight: 600;
+  color: #ffffff;
+}
+.hero__identity-role {
+  font-size: var(--step-small);
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.hero__pillars {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+.hero__pillar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+.hero__pillar-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  color: #ffffff;
+}
+.hero__pillar-mark svg {
+  width: 20px;
+  height: 20px;
+}
+.hero__pillar-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.hero__pillar-title {
   font-size: var(--step-body);
   font-weight: 600;
-  letter-spacing: -0.01em;
-  text-decoration: none;
-  opacity: 0.86;
-  transition: opacity 160ms ease;
+  color: #ffffff;
 }
-.hero__themes a:hover {
-  opacity: 1;
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
-}
-.hero__themes-sep {
-  color: rgba(241, 240, 237, 0.35);
+.hero__pillar-note {
+  font-size: var(--step-small);
+  color: rgba(255, 255, 255, 0.68);
 }
 
 /* ============ Sections ============ */
@@ -1134,9 +1206,13 @@ select {
   .mobile-sheet {
     display: none;
   }
-  .hero__grid {
-    grid-template-columns: 1.2fr 0.8fr;
-    align-items: end;
+  .hero__pillars {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+  .hero__pillar + .hero__pillar {
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
+    padding-left: 1.5rem;
   }
   .contact__columns {
     grid-template-columns: 1fr 0.5fr;
@@ -1207,6 +1283,22 @@ select {
   /* The primary action lives in the hero and in the menu on a phone. */
   .btn--nav {
     display: none;
+  }
+  .hero__identity {
+    text-align: left;
+  }
+  .hero__tagline {
+    font-size: var(--step-body);
+  }
+  .hero__pillar-note {
+    display: none;
+  }
+  .hero__pillars {
+    gap: 1rem;
+  }
+  .hero__pillar-mark {
+    width: 38px;
+    height: 38px;
   }
   .timeline__dates {
     margin-bottom: 0.25rem;

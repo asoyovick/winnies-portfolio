@@ -1,13 +1,48 @@
 import Image from 'next/image';
-import { getExperience, getExpertise, getMediaAsset, getProfile } from '@/lib/content';
+import { getExperience, getMediaAsset, getProfile } from '@/lib/content';
+
+const PILLARS = [
+  {
+    title: 'Tax compliance',
+    note: 'VAT, PAYE, withholding tax and corporation tax',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+        <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+        <path d="M14 3.5V8h4" />
+        <path d="M9 12h6M9 16h4" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Financial audit',
+    note: 'Audits with a tax focus',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="5.5" />
+        <path d="m14.5 14.5 4.5 4.5" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Accounting and reporting',
+    note: 'Bookkeeping, reconciliation and reporting',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+        <path d="M4 20V9M10 20V4M16 20v-7M22 20H2" />
+      </svg>
+    ),
+  },
+];
 
 /**
  * Homepage hero.
  *
- * Composition follows reference 2: a strong headline on the left, the person
- * on the right, and a lower band that introduces the main themes of the work.
- * The headline, the supporting line and the portrait are all editable from the
- * admin panel, so nothing here is hard-coded copy.
+ * A full-bleed picture with the statement laid over it, the way the reference
+ * does: headline and supporting line at the top left, one primary action, and
+ * a band at the foot of the screen with the three main areas of work.
+ *
+ * The picture is Winnie's own photograph when she has uploaded one, and a
+ * photograph of Kisumu — the town her practice is based in — until then.
  */
 export default function Hero() {
   const profile = getProfile();
@@ -27,96 +62,90 @@ export default function Hero() {
 
   const currentRole = getExperience().find((item) => Boolean(item.is_current));
 
-  const allExpertise = getExpertise();
-  const featured = allExpertise.filter((item) => Boolean(item.is_featured));
-  const themes = (featured.length > 0 ? featured : allExpertise).slice(0, 5);
-
-  let portraitSrc: string | null = null;
+  // Winnie's own photograph if there is one; otherwise the town she works in.
+  let backgroundSrc = '/images/kisumu-city.jpg';
+  let backgroundAlt = '';
   if (profile?.profile_image_id) {
     const asset = getMediaAsset(profile.profile_image_id);
     if (asset) {
-      portraitSrc = `/api/media/${encodeURIComponent(asset.storage_name)}`;
+      backgroundSrc = `/api/media/${encodeURIComponent(asset.storage_name)}`;
+      backgroundAlt = '';
     }
   }
 
   return (
     <section id="home" className="hero" aria-labelledby="hero-heading">
-      <div className="wrap hero__grid">
-        <div className="hero__statement">
-          <h1 id="hero-heading" className="hero__title">
-            {headingLines.map((line, index) => (
-              <span className="hero__title-line" key={index}>
-                {line}
-              </span>
-            ))}
-          </h1>
-          {subheading ? <p className="hero__lead">{subheading}</p> : null}
-          <div className="hero__actions">
-            <a href="#contact" className="btn">
-              Get in touch
-            </a>
-            <a href="#experience" className="hero__secondary">
-              Explore my experience <span aria-hidden="true">→</span>
-            </a>
-          </div>
-        </div>
+      <div className="hero__media">
+        <Image
+          src={backgroundSrc}
+          alt={backgroundAlt}
+          fill
+          priority
+          sizes="100vw"
+          className="hero__image"
+        />
+        <div className="hero__scrim" />
+      </div>
 
-        <div className="hero__aside">
-          {portraitSrc ? (
-            <figure className="hero__portrait">
-              <Image
-                src={portraitSrc}
-                alt={`${profile?.display_name ?? 'Winnie Awuor Otieno'}, ${profile?.professional_title ?? 'accounting, audit and tax professional'}`}
-                width={720}
-                height={900}
-                sizes="(max-width: 768px) 92vw, 36vw"
-                priority
-                className="hero__portrait-image"
-              />
-            </figure>
-          ) : (
-            <div className="hero__panel">
-              <p className="hero__panel-name">{profile?.display_name}</p>
-              <p className="hero__panel-title">{profile?.professional_title}</p>
-              <dl className="hero__panel-facts">
-                <div className="hero__fact">
-                  <dt>Based in</dt>
-                  <dd>{profile?.location}</dd>
-                </div>
-                {currentRole ? (
-                  <div className="hero__fact">
-                    <dt>Current role</dt>
-                    <dd>
-                      {currentRole.position}, {currentRole.organization}
-                    </dd>
-                  </div>
-                ) : null}
-                <div className="hero__fact">
-                  <dt>Works with</dt>
-                  <dd>NGOs, SACCOs and corporate businesses</dd>
-                </div>
-              </dl>
-            </div>
-          )}
+      <div className="wrap hero__content">
+        <h1 id="hero-heading" className="hero__title">
+          {headingLines.map((line, index) => (
+            <span className="hero__title-line" key={index}>
+              {line}
+            </span>
+          ))}
+        </h1>
+        {subheading ? <p className="hero__lead">{subheading}</p> : null}
+        <div className="hero__actions">
+          <a href="#contact" className="btn btn--pill">
+            Get in touch
+          </a>
+          <a
+            href="#experience"
+            className="hero__circle"
+            aria-label="Explore my experience"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              aria-hidden="true"
+            >
+              <path d="M5 12h13M12 5l7 7-7 7" />
+            </svg>
+          </a>
         </div>
       </div>
 
-      {themes.length > 0 ? (
+      <div className="hero__foot">
         <div className="wrap">
-          <ul className="hero__themes">
-            {themes.map((area, index) => (
-              <li key={area.id}>
-                {index > 0 ? (
-                  <span aria-hidden="true" className="hero__themes-sep">
-                    ·
-                  </span>
-                ) : null}
-                <a href="#expertise">{area.title}</a>
+          <div className="hero__foot-head">
+            <p className="hero__tagline">Clear thinking. Focused on your numbers.</p>
+            <p className="hero__identity">
+              <span className="hero__identity-name">{profile?.display_name}</span>
+              <span className="hero__identity-role">
+                {currentRole
+                  ? `${currentRole.position}, ${currentRole.organization}`
+                  : profile?.professional_title}
+                {profile?.location ? ` · ${profile.location}` : ''}
+              </span>
+            </p>
+          </div>
+
+          <ul className="hero__pillars">
+            {PILLARS.map((pillar) => (
+              <li key={pillar.title} className="hero__pillar">
+                <span className="hero__pillar-mark">{pillar.icon}</span>
+                <span className="hero__pillar-text">
+                  <span className="hero__pillar-title">{pillar.title}</span>
+                  <span className="hero__pillar-note">{pillar.note}</span>
+                </span>
               </li>
             ))}
           </ul>
         </div>
-      ) : null}
+      </div>
     </section>
   );
 }
