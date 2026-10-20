@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { getExperience, getExpertise, getMediaAsset, getProfile } from '@/lib/content';
 
 /**
@@ -63,13 +64,14 @@ export default function Hero() {
         <div className="hero__aside">
           {portraitSrc ? (
             <figure className="hero__portrait">
-              <img
+              <Image
                 src={portraitSrc}
                 alt={`${profile?.display_name ?? 'Winnie Awuor Otieno'}, ${profile?.professional_title ?? 'accounting, audit and tax professional'}`}
                 width={720}
                 height={900}
-                loading="eager"
-                decoding="async"
+                sizes="(max-width: 768px) 92vw, 36vw"
+                priority
+                className="hero__portrait-image"
               />
             </figure>
           ) : (

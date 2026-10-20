@@ -383,7 +383,7 @@ select {
 .hero__portrait {
   margin: 0;
 }
-.hero__portrait img {
+.hero__portrait-image {
   display: block;
   width: 100%;
   height: auto;
@@ -1274,12 +1274,22 @@ select {
 
 /* ============ Admin shell (app-screen rules) ============ */
 .admin-shell {
-  display: flex;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 100vh;
   background: var(--bg);
 }
 
+.admin-topbar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: none;
+}
+
 .admin-sidebar {
+  grid-column: 1;
+  grid-row: 2;
   width: 236px;
   flex-shrink: 0;
   border-right: 1px solid var(--surface);
@@ -1361,15 +1371,13 @@ select {
 }
 
 /* Phone navigation */
-.admin-topbar {
-  display: none;
-}
 .admin-sheet {
   display: none;
 }
 
 .admin-canvas {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 2;
   min-width: 0;
   background: var(--bg);
   padding: 2rem clamp(1rem, 3vw, 2.5rem) 4rem;
@@ -1817,8 +1825,16 @@ select {
 
 /* ============ Responsive admin ============ */
 @media (max-width: 900px) {
+  .admin-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
   .admin-sidebar {
     display: none;
+  }
+  .admin-canvas {
+    grid-column: 1;
+    grid-row: 2;
   }
   .admin-topbar {
     display: flex;
