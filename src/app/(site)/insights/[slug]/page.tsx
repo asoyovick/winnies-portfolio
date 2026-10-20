@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { getArticleBySlug } from '@/lib/content';
 import { sanitizeHtml } from '@/lib/sanitize';
 
@@ -25,16 +27,9 @@ export default async function ArticlePage({ params }: Params) {
   const { slug } = await params;
   const article = getArticleBySlug(slug);
 
+  // A draft is not published, so it is not found — the URL gives nothing away.
   if (!article) {
-    return (
-      <div className="page wrap section">
-        <h1 className="section__head">Insight not found</h1>
-        <p>This article is not available.</p>
-        <p style={{ marginTop: '1.5rem' }}>
-          <a href="/">Back to the homepage</a>
-        </p>
-      </div>
-    );
+    notFound();
   }
 
   const published = article.published_at
@@ -47,9 +42,9 @@ export default async function ArticlePage({ params }: Params) {
   return (
     <div className="page">
       <article className="wrap article">
-        <a href="/#insights" className="article__back">
+        <Link href="/#insights" className="article__back">
           All insights
-        </a>
+        </Link>
         <h1 className="article__title">{article.title}</h1>
         {article.summary ? <p className="article__summary">{article.summary}</p> : null}
         {published ? <p className="article__date">{published}</p> : null}

@@ -3,6 +3,14 @@ import type { MetadataRoute } from 'next';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
+// The list of published insights changes in the admin panel, so the sitemap is
+// rendered per request rather than baked at build time.
+export const dynamic = 'force-dynamic';
+
+/**
+ * The public site is a single page with sections, so the sitemap lists the
+ * home page and the published insights. Drafts are never listed.
+ */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
     {
@@ -10,24 +18,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 1,
-    },
-    {
-      url: `${BASE_URL}/about`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: `${BASE_URL}/experience`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: `${BASE_URL}/contact`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
     },
   ];
 
@@ -37,7 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${BASE_URL}/insights/${article.slug}`,
       lastModified: new Date(article.updated_at),
       changeFrequency: 'monthly',
-      priority: 0.5,
+      priority: 0.6,
     });
   }
 

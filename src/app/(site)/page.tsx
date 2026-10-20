@@ -9,6 +9,10 @@ import Insights from '@/components/Insights';
 import Contact from '@/components/Contact';
 import { getMediaAsset, getProfile } from '@/lib/content';
 
+// The page is rendered for every request so that anything Winnie changes in
+// the admin panel is on the public site straight away.
+export const dynamic = 'force-dynamic';
+
 export default function Page() {
   const profile = getProfile();
 
