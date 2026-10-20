@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { adminRequest, refreshCsrfToken, uploadFile } from '@/lib/admin-client';
+import { formatBytes, formatDateTime } from '@/lib/format';
 
 type Asset = {
   id: number;
@@ -13,107 +15,253 @@ type Asset = {
   public_url: string;
 };
 
+type Pending = {
+  name: string;
+  percent: number;
+};
+
 export default function MediaPage() {
   const [items, setItems] = useState<Asset[]>([]);
   const [error, setError] = useState('');
-  const [ok, setOk] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [csrf, setCsrf] = useState('');
+  const [notice, setNotice] = useState('');
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetch('/api/media').then(async (r) => setItems(await r.json()));
-    fetch('/api/auth/csrf').then(async (r) => {
-      const json = await r.json();
-      if (json.ok) {
-        const m = document.cookie.match(/(?:^|; )portfolio_csrf=([^;]+)/);
-        setCsrf((m && m[1]) || '');
-      }
-    });
+  const load = useCallback(async () => {
+    const result = await adminRequest<Asset[]>('/api/media');
+    if (result.ok && result.data) setItems(result.data);
+    setLoading(false);
   }, []);
 
-  async function api(method: string, path: string, body?: any, headers?: Record<string, string>) {
-    const token = csrf;
-    const h: Record<string, string> = { 'X-CSRF-Token': token, Cookie: `portfolio_csrf=${token}` };
-    if (headers) Object.assign(h, headers);
-    if (body && !(body instanceof FormData)) h['Content-Type'] = 'application/json';
-    return fetch(path, { method, headers: h, body: body && !(body instanceof FormData) ? JSON.stringify(body) : body });
-  }
+  useEffect(() => {
+    void (async () => {
+      await refreshCsrfToken();
+      await load();
+    })();
+  }, [load]);
 
-  async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function uploadFiles(files: FileList | File[]) {
+    const list = Array.from(files);
+    if (list.length === 0) return;
     setError('');
-    setOk('');
-    setLoading(true);
-    const form = new FormData(e.currentTarget);
-    const file = form.get('file') as File;
-    if (!file) { setError('Choose a file.'); setLoading(false); return; }
-    const resp = await api('POST', '/api/media', form);
-    if (!resp.ok) { const json = await resp.json(); setError(json.error || 'Upload failed.'); setLoading(false); return; }
-    setOk('Uploaded.');
-    setLoading(false);
-    e.currentTarget.reset();
-    const fresh = await (await fetch('/api/media')).json();
-    setItems(fresh);
+    setNotice('');
+
+    for (const file of list) {
+      setPending((current) => [...current, { name: file.name, percent: 0 }]);
+      const result = await uploadFile(file, (percent) => {
+        setPending((current) =>
+          current.map((item) => (item.name === file.name ? { ...item, percent } : item))
+        );
+      });
+      setPending((current) => current.filter((item) => item.name !== file.name));
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setNotice(`Uploaded ${file.name}.`);
+      }
+    }
+    await load();
   }
 
-  async function handleDelete(id: number) {
-    if (!window.confirm('Delete this asset?')) return;
-    const resp = await api('DELETE', `/api/media?id=${id}&confirm=force`);
-    if (!resp.ok) { const json = await resp.json(); setError(json.error || 'Delete failed.'); return; }
-    const fresh = await (await fetch('/api/media')).json();
-    setItems(fresh);
+  async function handleReplace(asset: Asset, file: File) {
+    setError('');
+    setNotice('');
+    setPending([{ name: file.name, percent: 0 }]);
+
+    const uploaded = await uploadFile(file, (percent) => {
+      setPending((current) =>
+        current.map((item) => (item.name === file.name ? { ...item, percent } : item))
+      );
+    });
+    setPending([]);
+    if (!uploaded.ok) {
+      setError(uploaded.error);
+      return;
+    }
+
+    const result = await adminRequest('/api/media', {
+      method: 'PUT',
+      body: { id: asset.id, replacement_id: uploaded.data.id },
+    });
+    if (!result.ok) {
+      setError(result.error);
+      await load();
+      return;
+    }
+    setNotice(`Replaced ${asset.original_name}.`);
+    await load();
   }
 
-  const isImage = (m: string) => m.startsWith('image/');
+  async function handleDelete(asset: Asset) {
+    setError('');
+    setNotice('');
+
+    const result = await adminRequest(`/api/media?id=${asset.id}`, { method: 'DELETE' });
+    if (result.ok) {
+      setNotice(`Deleted ${asset.original_name}.`);
+      await load();
+      return;
+    }
+
+    if (result.status === 409) {
+      const references: string[] = result.data?.references ?? [];
+      const confirmed = window.confirm(
+        `${asset.original_name} is still used by:\n\n${references.join('\n')}\n\nDelete it anyway?`
+      );
+      if (!confirmed) {
+        setError('Nothing was deleted.');
+        return;
+      }
+      const forced = await adminRequest(`/api/media?id=${asset.id}&confirm=force`, {
+        method: 'DELETE',
+      });
+      if (!forced.ok) {
+        setError(forced.error);
+        return;
+      }
+      setNotice(`Deleted ${asset.original_name}.`);
+      await load();
+      return;
+    }
+
+    setError(result.error);
+  }
+
+  function isImage(asset: Asset) {
+    return asset.mime_type.startsWith('image/');
+  }
 
   return (
-    <div className="admin-canvas">
+    <div>
       <div className="admin-canvas__head">
-        <h1 className="admin-canvas__title">Media library</h1>
-        <p className="admin-canvas__sub">
-          Upload and manage images and documents used on the portfolio.
-        </p>
-      </div>
-      {error && <p className="admin-login__error" role="alert">{error}</p>}
-      {ok && <p className="admin-login__error" role="status" style={{ color: 'var(--accent)' }}>{ok}</p>}
-      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '340px' }}>
-          <form onSubmit={handleUpload} noValidate className="admin-form">
-            <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: 'var(--ink)' }}>Upload asset</h3>
-            <div className="field">
-              <label>File</label>
-              <input type="file" name="file" required />
-              <p className="admin-form__help">JPEG, PNG, WebP images and PDF documents (max 10 MB).</p>
-            </div>
-            <button type="submit" className="btn" disabled={loading}>
-              {loading ? 'Uploading…' : 'Upload'}
-            </button>
-          </form>
+        <div>
+          <h1 className="admin-canvas__title">Media library</h1>
+          <p className="admin-canvas__sub">
+            Photographs and documents used on the portfolio. Files are stored
+            permanently and are only published where you select them.
+          </p>
         </div>
-        <div style={{ width: '560px' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: 'var(--ink)' }}>{items.length} asset(s)</h3>
+      </div>
+
+      {error ? (
+        <p className="admin-login__error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <p className="admin-login__error" role="status" style={{ color: 'var(--accent)' }}>
+          {notice}
+        </p>
+      ) : null}
+
+      <section className="admin-section">
+        <div
+          className={`dropzone${dragActive ? ' dropzone--active' : ''}`}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            if (event.dataTransfer?.files?.length) {
+              void uploadFiles(event.dataTransfer.files);
+            }
+          }}
+        >
+          <p className="dropzone__title">Drop files here</p>
+          <p className="dropzone__hint">
+            JPEG, PNG and WebP images, or PDF documents. Up to 10 MB each.
+          </p>
+          <button
+            type="button"
+            className="btn dropzone__button"
+            onClick={() => inputRef.current?.click()}
+          >
+            Choose files
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            onChange={(event) => {
+              const files = event.target.files;
+              event.target.value = '';
+              if (files?.length) void uploadFiles(files);
+            }}
+          />
+        </div>
+
+        {pending.length > 0 ? (
+          <ul className="admin-note" style={{ listStyle: 'none', padding: 0 }}>
+            {pending.map((item) => (
+              <li key={item.name}>
+                {item.name} — {item.percent}%
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <section className="admin-section">
+        <h2 className="admin-section__title">
+          {loading ? 'Loading…' : `${items.length} asset${items.length === 1 ? '' : 's'}`}
+        </h2>
+        {items.length === 0 && !loading ? (
+          <p className="admin-empty">
+            No files uploaded yet. Drop an image above to get started.
+          </p>
+        ) : (
           <div className="media-grid">
-            {items.map((item) => (
-              <div key={item.id} className="media-item">
-                {isImage(item.mime_type) ? (
-                  <img src={item.public_url} alt={item.original_name} loading="lazy" />
+            {items.map((asset) => (
+              <div key={asset.id} className="media-item">
+                {isImage(asset) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={asset.public_url} alt={asset.original_name} loading="lazy" />
                 ) : (
-                  <div style={{ width: '100%', height: 120, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>📄</div>
+                  <div className="picker__thumb picker__thumb--file">PDF</div>
                 )}
-                <div className="media-item__name">{item.original_name}</div>
-                <div className="media-item__meta">{item.mime_type} · {(item.size / 1024).toFixed(1)} KB</div>
+                <div className="media-item__name">{asset.original_name}</div>
+                <div className="media-item__meta">
+                  {asset.mime_type} · {formatBytes(asset.size)}
+                  <br />
+                  Added {formatDateTime(asset.created_at)}
+                </div>
                 <div className="media-item__actions">
-                  <a href={item.public_url} target="_blank" rel="noreferrer" style={{ fontSize: '0.7rem', color: 'var(--accent)', textDecoration: 'none' }}>View</a>
-                  <button onClick={() => handleDelete(item.id)} style={{ fontSize: '0.7rem', color: '#7a2e1e', border: '1px solid var(--surface)', background: 'transparent', cursor: 'pointer', marginLeft: '0.2rem' }}>Delete</button>
+                  <a href={asset.public_url} target="_blank" rel="noreferrer">
+                    View
+                  </a>
+                  <label className="media-item__label" style={{ cursor: 'pointer' }}>
+                    Replace
+                    <input
+                      type="file"
+                      hidden
+                      accept={isImage(asset) ? 'image/jpeg,image/png,image/webp' : 'application/pdf'}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        if (file) void handleReplace(asset, file);
+                      }}
+                    />
+                  </label>
+                  <button type="button" onClick={() => handleDelete(asset)}>
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
-            {items.length === 0 && <p className="admin-empty">No media uploaded yet.</p>}
           </div>
-        </div>
-      </div>
-      <div style={{ marginTop: '2rem' }}>
-        <Link href="/admin" className="btn btn--text">← Back to dashboard</Link>
+        )}
+      </section>
+
+      <div className="admin-actions-row">
+        <Link href="/admin" className="btn btn--text">
+          Back to dashboard
+        </Link>
       </div>
     </div>
   );

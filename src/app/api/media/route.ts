@@ -100,6 +100,68 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PUT(request: Request) {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
+  const admin = requireAdmin(sessionToken);
+  if ('error' in admin) {
+    return NextResponse.json({ error: admin.error }, { status: admin.status });
+  }
+  const csrfCookie = cookieStore.get('portfolio_csrf')?.value ?? null;
+  const csrfHeader = request.headers.get('x-csrf-token') ?? null;
+  if (!validateCsrfToken(csrfHeader, csrfCookie)) {
+    return NextResponse.json({ error: 'Invalid CSRF token.' }, { status: 403 });
+  }
+
+  let body: { id?: number; replacement_id?: number };
+  try {
+    body = (await request.json()) as { id?: number; replacement_id?: number };
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+  }
+
+  const id = Number(body.id);
+  const replacementId = Number(body.replacement_id);
+  if (!id || !replacementId || id === replacementId) {
+    return NextResponse.json(
+      { error: 'A different replacement asset is required.' },
+      { status: 400 }
+    );
+  }
+
+  const current = db.prepare('SELECT * FROM media WHERE id = ?').get(id) as any | undefined;
+  const replacement = db.prepare('SELECT * FROM media WHERE id = ?').get(replacementId) as any | undefined;
+  if (!current || !replacement) {
+    return NextResponse.json({ error: 'Media item not found.' }, { status: 404 });
+  }
+
+  // Move every reference to the replacement, then remove the old file.
+  const now = new Date().toISOString();
+  db.prepare('UPDATE profile_settings SET profile_image_id = ? WHERE profile_image_id = ?').run(
+    replacementId,
+    id
+  );
+  db.prepare('UPDATE profile_settings SET cv_media_id = ? WHERE cv_media_id = ?').run(
+    replacementId,
+    id
+  );
+  db.prepare('UPDATE articles SET featured_image_id = ? WHERE featured_image_id = ?').run(
+    replacementId,
+    id
+  );
+  db.prepare('UPDATE profile_settings SET updated_at = ? WHERE id = 1').run(now);
+
+  try {
+    await import('@/lib/storage').then((mod) => mod.deleteFile(current.storage_name));
+  } catch {
+    // The file may already be gone; the database record is still removed.
+  }
+  db.prepare('DELETE FROM media WHERE id = ?').run(id);
+
+  const row = db.prepare('SELECT * FROM media WHERE id = ?').get(replacementId);
+  return NextResponse.json(assetResponse(row));
+}
+
 export async function DELETE(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
