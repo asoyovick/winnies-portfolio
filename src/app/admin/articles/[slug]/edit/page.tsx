@@ -6,16 +6,14 @@ import ArticleEditor from '../../editor';
 export default async function EditArticlePage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
   const session = await getServerAdmin();
   if ('redirect' in session) redirect(session.redirect);
-  const article = db.prepare('SELECT * FROM articles WHERE slug = ?').get(params.slug) as any | null;
+
+  const { slug } = await params;
+  const article = db.prepare('SELECT * FROM articles WHERE slug = ?').get(slug) as any | null;
   if (!article) redirect('/admin/articles');
-  return (
-    <div className="admin-canvas">
-      <h1 className="admin-canvas__title">Edit article</h1>
-      <ArticleEditor initial={article} />
-    </div>
-  );
+
+  return <ArticleEditor initial={article} />;
 }

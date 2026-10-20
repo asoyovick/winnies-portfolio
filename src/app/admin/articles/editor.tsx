@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { MediaPicker } from '@/components/admin/MediaPicker';
+import { adminRequest, refreshCsrfToken } from '@/lib/admin-client';
 
 type Article = {
   id: number;
@@ -18,102 +21,182 @@ export default function ArticleEditor({ initial }: { initial: Article | null }) 
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const isNew = !params.slug;
+
   const [values, setValues] = useState({
-    title: initial?.title || '',
-    slug: initial?.slug || '',
-    summary: initial?.summary || '',
-    body: initial?.body || '',
-    featured_image_id: String(initial?.featured_image_id ?? ''),
-    status: initial?.status || 'draft',
+    title: initial?.title ?? '',
+    slug: initial?.slug ?? '',
+    summary: initial?.summary ?? '',
+    body: initial?.body ?? '',
   });
+  const [coverId, setCoverId] = useState<number | null>(initial?.featured_image_id ?? null);
+  const [status, setStatus] = useState(initial?.status ?? 'draft');
   const [error, setError] = useState('');
-  const [ok, setOk] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [csrf, setCsrf] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/csrf').then(async (res) => {
-      const json = await res.json();
-      if (json.ok) {
-        const m = document.cookie.match(/(?:^|; )portfolio_csrf=([^;]+)/);
-        setCsrf((m && m[1]) || '');
-      }
-    });
+    void refreshCsrfToken();
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setError('');
-    setOk(false);
-    setLoading(true);
-    const token = csrf;
-    const isPublish = values.status === 'published';
-    const body: any = {
+    setNotice('');
+    setSaving(true);
+
+    const body: Record<string, unknown> = {
       title: values.title,
       slug: values.slug,
       summary: values.summary,
       body: values.body,
-      featured_image_id: values.featured_image_id ? Number(values.featured_image_id) : null,
-      status: values.status,
+      featured_image_id: coverId,
+      status,
     };
-    if (!isNew) body.id = initial!.id;
-    if (isPublish && !initial?.published_at) body.published_at = new Date().toISOString();
+    if (!isNew && initial) body.id = initial.id;
+    if (status === 'published' && !initial?.published_at) {
+      body.published_at = new Date().toISOString();
+    }
 
-    const res = isNew
-      ? await fetch('/api/articles', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Cookie: `portfolio_csrf=${token}` }, body: JSON.stringify(body) })
-      : await fetch('/api/articles', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Cookie: `portfolio_csrf=${token}` }, body: JSON.stringify(body) });
-    const json = await res.json();
-    if (!res.ok) { setError(json.error || 'Save failed.'); setLoading(false); return; }
-    setOk(true);
-    setLoading(false);
-    if (isNew) setTimeout(() => router.push('/admin/articles'), 600);
+    const result = isNew
+      ? await adminRequest('/api/articles', { method: 'POST', body })
+      : await adminRequest('/api/articles', { method: 'PUT', body });
+
+    setSaving(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setNotice(status === 'published' ? 'Published.' : 'Saved as a draft.');
+    if (isNew) {
+      router.push('/admin/articles');
+      router.refresh();
+    }
   }
 
+  const preview = values.body
+    .split(/\n{2,}/)
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((block, index) => (
+      <p key={index}>{block.replace(/<[^>]+>/g, '')}</p>
+    ));
+
   return (
-    <form className="admin-form" onSubmit={handleSubmit} noValidate>
-      <h2 className="admin-canvas__title" style={{ fontSize: '1.15rem', marginBottom: '0.75rem' }}>
-        {isNew ? 'New article' : 'Edit article'}
-      </h2>
-      {error && <p className="admin-login__error" role="alert">{error}</p>}
-      {ok && <p className="admin-login__error" role="status" style={{ color: 'var(--accent)' }}>Saved.</p>}
-
-      <div className="field">
-        <label>Title</label>
-        <input value={values.title} onChange={(e) => setValues({ ...values, title: e.target.value })} />
-        {isNew && (
-          <div className="field">
-            <label>Slug</label>
-            <input value={values.slug} onChange={(e) => setValues({ ...values, slug: e.target.value })} />
-            <p className="admin-form__help">URL-friendly identifier.</p>
-          </div>
-        )}
+    <div>
+      <div className="admin-canvas__head">
+        <div>
+          <h1 className="admin-canvas__title">
+            {isNew ? 'New article' : 'Edit article'}
+          </h1>
+          <p className="admin-canvas__sub">
+            Write in plain text. Paragraphs are separated by a blank line.
+          </p>
+        </div>
+        <div className="admin-actions-row" style={{ marginTop: 0 }}>
+          <Link href="/admin/articles" className="btn btn--text">
+            All articles
+          </Link>
+        </div>
       </div>
 
-      <div className="field">
-        <label>Summary</label>
-        <textarea value={values.summary} onChange={(e) => setValues({ ...values, summary: e.target.value })} />
-      </div>
+      {error ? (
+        <p className="admin-login__error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <p className="admin-login__error" role="status" style={{ color: 'var(--accent)' }}>
+          {notice}
+        </p>
+      ) : null}
 
-      <div className="field">
-        <label>Body (HTML)</label>
-        <textarea value={values.body} onChange={(e) => setValues({ ...values, body: e.target.value })} style={{ minHeight: '300px', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }} />
-      </div>
+      <form className="admin-form" onSubmit={handleSubmit} noValidate>
+        <div className="field">
+          <label htmlFor="article-title">Title</label>
+          <input
+            id="article-title"
+            value={values.title}
+            onChange={(e) => setValues({ ...values, title: e.target.value })}
+          />
+        </div>
 
-      <div className="field">
-        <label>Featured image (media ID)</label>
-        <input value={values.featured_image_id} onChange={(e) => setValues({ ...values, featured_image_id: e.target.value })} />
-        <p className="admin-form__help">Enter the ID of an uploaded media asset from the media library.</p>
-      </div>
+        <div className="field">
+          <label htmlFor="article-slug">Address</label>
+          <input
+            id="article-slug"
+            value={values.slug}
+            placeholder="how-to-read-a-reconciliation"
+            onChange={(e) => setValues({ ...values, slug: e.target.value })}
+          />
+          <p className="admin-form__help">
+            The article is published at /insights/ followed by this text. Leave
+            empty to build it from the title.
+          </p>
+        </div>
 
-      <div className="field" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-        <input type="checkbox" checked={values.status === 'published'} onChange={(e) => setValues({ ...values, status: e.target.checked ? 'published' : 'draft' })} />
-        <label style={{ marginBottom: 0 }}>{isNew ? 'Publish immediately' : 'Published'}</label>
-      </div>
+        <div className="field">
+          <label htmlFor="article-summary">Summary</label>
+          <textarea
+            id="article-summary"
+            rows={2}
+            value={values.summary}
+            onChange={(e) => setValues({ ...values, summary: e.target.value })}
+          />
+          <p className="admin-form__help">One or two sentences shown in the list.</p>
+        </div>
 
-      <button type="submit" className="btn" disabled={loading}>
-        {loading ? 'Saving…' : isNew ? 'Create article' : 'Save article'}
-      </button>
-      <button type="button" onClick={() => router.push('/admin/articles')} className="btn btn--text" style={{ marginLeft: '0.5rem' }}>Cancel</button>
-    </form>
+        <div className="field">
+          <label htmlFor="article-body">Article</label>
+          <textarea
+            id="article-body"
+            rows={14}
+            value={values.body}
+            onChange={(e) => setValues({ ...values, body: e.target.value })}
+          />
+        </div>
+
+        <MediaPicker
+          label="Cover image"
+          help="Optional. Shown at the top of the published article."
+          kind="image"
+          value={coverId}
+          onChange={setCoverId}
+        />
+
+        <div className="field" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <input
+            id="article-status"
+            type="checkbox"
+            checked={status === 'published'}
+            onChange={(e) => setStatus(e.target.checked ? 'published' : 'draft')}
+          />
+          <label htmlFor="article-status" style={{ marginBottom: 0 }}>
+            Published on the public site
+          </label>
+        </div>
+
+        <div className="admin-actions-row">
+          <button type="submit" className="btn" disabled={saving}>
+            {saving ? 'Saving…' : status === 'published' ? 'Save and publish' : 'Save draft'}
+          </button>
+          {initial?.status === 'published' ? (
+            <Link href={`/insights/${initial.slug}`} target="_blank" className="btn btn--text">
+              Preview
+            </Link>
+          ) : null}
+        </div>
+      </form>
+
+      {values.title || values.body ? (
+        <section className="admin-section">
+          <h2 className="admin-section__title">Preview</h2>
+          <article className="article-preview">
+            <h3 className="article-preview__title">{values.title || 'Untitled'}</h3>
+            {values.summary ? <p className="article-preview__summary">{values.summary}</p> : null}
+            <div className="article-preview__body">{preview}</div>
+          </article>
+        </section>
+      ) : null}
+    </div>
   );
 }

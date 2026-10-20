@@ -1,103 +1,167 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { adminRequest, refreshCsrfToken } from '@/lib/admin-client';
+import { formatDateTime } from '@/lib/format';
 
 type Article = {
   id: number;
   title: string;
   slug: string;
   status: string;
+  published_at: string | null;
   updated_at: string;
 };
 
 export default function ArticlesPage() {
   const [articles, setArticles] = useState<Article[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  function getCsrf(): string {
-    const m = document.cookie.match(/(?:^|; )portfolio_csrf=([^;]+)/);
-    return (m && m[1]) || '';
-  }
-
-  useEffect(() => {
-    fetch('/api/articles').then(async (r) => setItems(await r.json()));
+  const load = useCallback(async () => {
+    const result = await adminRequest<Article[]>('/api/articles');
+    if (result.ok && result.data) setArticles(result.data);
+    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    void (async () => {
+      await refreshCsrfToken();
+      await load();
+    })();
+  }, [load]);
+
   async function toggle(item: Article) {
-    const token = getCsrf();
-    const res = await fetch('/api/articles', {
+    setError('');
+    const next = item.status === 'published' ? 'draft' : 'published';
+    const result = await adminRequest('/api/articles', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': token,
-        Cookie: `portfolio_csrf=${token}`,
-      },
-      body: JSON.stringify({ id: item.id, status: item.status === 'published' ? 'draft' : 'published' }),
+      body: { id: item.id, status: next },
     });
-    if (res.ok) setItems(articles.map((a) => (a.id === item.id ? { ...a, status: a.status === 'published' ? 'draft' : 'published' } : a)));
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    await load();
   }
 
-  async function deleteItem(id: number) {
-    if (!window.confirm('Delete this article?')) return;
-    const token = getCsrf();
-    const res = await fetch(`/api/articles?id=${id}&confirm=delete`, {
+  async function remove(item: Article) {
+    if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return;
+    setError('');
+    const result = await adminRequest(`/api/articles?id=${item.id}&confirm=delete`, {
       method: 'DELETE',
-      headers: { 'X-CSRF-Token': token, Cookie: `portfolio_csrf=${token}` },
     });
-    if (res.ok) setItems(articles.filter((a) => a.id !== id));
-  }
-
-  async function setItems(json: any) {
-    setArticles(json);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    await load();
   }
 
   return (
-    <div className="admin-canvas">
+    <div>
       <div className="admin-canvas__head">
-        <h1 className="admin-canvas__title">Insights &amp; articles</h1>
-        <p className="admin-canvas__sub">
-          Manage articles and professional insights shown on the public site.
+        <div>
+          <h1 className="admin-canvas__title">Insights</h1>
+          <p className="admin-canvas__sub">
+            Articles published under Professional insights. Drafts stay private
+            until you publish them.
+          </p>
+        </div>
+        <Link href="/admin/articles/new" className="btn">
+          New article
+        </Link>
+      </div>
+
+      {error ? (
+        <p className="admin-login__error" role="alert">
+          {error}
         </p>
-      </div>
-      <div className="admin-actions-row" style={{ marginBottom: '1rem' }}>
-        <Link href="/admin/articles/new" className="btn">New article</Link>
-      </div>
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th style={{ width: '260px' }}>Title</th>
-            <th style={{ width: '170px' }}>Slug</th>
-            <th style={{ width: '120px' }}>Status</th>
-            <th style={{ width: '170px' }}>Updated</th>
-            <th style={{ width: '220px' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {articles.map((item) => (
-            <tr key={item.id}>
-              <td>{item.title}</td>
-              <td><code style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{item.slug}</code></td>
-              <td>
-                <button
-                  onClick={() => toggle(item)}
-                  className="btn btn--text"
-                  style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer' }}
-                >
-                  {item.status === 'published' ? 'Unpublish' : 'Publish'}
-                </button>
-              </td>
-              <td>{new Date(item.updated_at).toLocaleDateString('en-GB')}</td>
-              <td>
-                <Link href={`/admin/articles/${item.slug}/edit`} className="btn btn--text" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', marginRight: '0.3rem' }}>Edit</Link>
-                <button onClick={() => deleteItem(item.id)} style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', color: '#7a2e1e', border: '1px solid var(--surface)', background: 'transparent', cursor: 'pointer' }}>Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {articles.length === 0 && <p className="admin-empty">No articles yet.</p>}
-      <div style={{ marginTop: '2rem' }}>
-        <Link href="/admin" className="btn btn--text">← Back to dashboard</Link>
+      ) : null}
+
+      <section className="admin-section">
+        {loading ? (
+          <p className="admin-note">Loading…</p>
+        ) : articles.length === 0 ? (
+          <p className="admin-empty">
+            No articles yet. Start one when you are ready to publish a note.
+          </p>
+        ) : (
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {articles.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <strong>{item.title}</strong>
+                    <br />
+                    <span style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>
+                      /insights/{item.slug}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className={`admin-badge${
+                        item.status === 'published' ? ' admin-badge--ongoing' : ''
+                      }`}
+                    >
+                      {item.status === 'published' ? 'Published' : 'Draft'}
+                    </span>
+                    {item.published_at ? (
+                      <div style={{ color: 'var(--muted)', fontSize: '0.72rem', marginTop: '0.25rem' }}>
+                        Since {formatDateTime(item.published_at)}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>{formatDateTime(item.updated_at)}</td>
+                  <td>
+                    <Link href={`/admin/articles/${item.slug}/edit`}>Edit</Link>
+                    {item.status === 'published' ? (
+                      <Link
+                        href={`/insights/${item.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ marginLeft: '0.6rem' }}
+                      >
+                        View
+                      </Link>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn btn--text"
+                      onClick={() => toggle(item)}
+                      style={{ marginLeft: '0.6rem' }}
+                    >
+                      {item.status === 'published' ? 'Unpublish' : 'Publish'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--text"
+                      onClick={() => remove(item)}
+                      style={{ marginLeft: '0.4rem', color: '#7a2e1e' }}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <div className="admin-actions-row">
+        <Link href="/admin" className="btn btn--text">
+          Back to dashboard
+        </Link>
       </div>
     </div>
   );
