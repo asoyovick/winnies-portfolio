@@ -547,8 +547,9 @@ select {
 
 /* ============ Experience timeline ============ */
 .timeline {
+  --timeline-gutter: 36px;
   position: relative;
-  padding-left: 36px;
+  padding-left: var(--timeline-gutter);
   margin-top: clamp(1.5rem, 4vw, 2.5rem);
 }
 .timeline__axis {
@@ -565,7 +566,8 @@ select {
 }
 .timeline__marker {
   position: absolute;
-  left: 0;
+  /* Pulled back onto the axis, clear of the text beside it. */
+  left: calc(-1 * var(--timeline-gutter));
   top: 0.35rem;
   width: 14px;
   height: 14px;
