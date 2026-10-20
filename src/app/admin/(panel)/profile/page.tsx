@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MediaPicker } from '@/components/admin/MediaPicker';
+import { PasswordPanel } from '@/components/admin/PasswordPanel';
 import { adminRequest, refreshCsrfToken } from '@/lib/admin-client';
 
 type SocialLink = { label: string; url: string };
@@ -331,6 +332,9 @@ export default function ProfilePage() {
           </Link>
         </div>
       </form>
+
+      {/* Kept outside the profile form: it carries its own forms. */}
+      <PasswordPanel />
     </div>
   );
 }

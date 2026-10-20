@@ -1537,6 +1537,9 @@ select {
   padding: 1.5rem 0 0.5rem;
   margin: 0 0 1.5rem;
 }
+.admin-group--spaced {
+  margin-top: 2.5rem;
+}
 .admin-group__legend {
   font-size: 0.8rem;
   font-weight: 600;
@@ -1575,7 +1578,7 @@ select {
   display: grid;
   grid-template-columns: 1fr 1.6fr auto;
   gap: 0.75rem;
-  align-items: end;
+  align-items: start;
   padding-bottom: 0.5rem;
 }
 .admin-repeat .field {
@@ -1584,6 +1587,9 @@ select {
 .admin-repeat .btn--text {
   padding-bottom: 0.7rem;
   font-size: 0.8rem;
+}
+.admin-repeat .btn {
+  margin-top: 1.65rem;
 }
 
 /* KPI strip */
@@ -1808,6 +1814,26 @@ select {
 }
 .dropzone__button {
   margin-top: 0.75rem;
+}
+
+/* Sealed credential shown once in the admin panel */
+.admin-secret {
+  border: 1px solid var(--surface);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  background: var(--surface);
+}
+.admin-secret__label {
+  font-size: var(--step-small);
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.admin-secret__value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.05rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  user-select: all;
 }
 
 /* Article preview in the admin editor */

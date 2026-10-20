@@ -6,6 +6,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
+import { sealCredential } from '@/lib/credential-vault';
 
 /**
  * End-to-end tests against a real Next.js server.
@@ -52,9 +53,19 @@ function prepareDatabase(): void {
     db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
   }
   const now = new Date().toISOString();
+  // The sealed copy uses the same secret as the server under test.
+  process.env.SESSION_SECRET = SESSION_SECRET;
   db.prepare(
-    'INSERT INTO admins (email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?)'
-  ).run(ADMIN_EMAIL, bcrypt.hashSync(ADMIN_PASSWORD, 12), now, now);
+    `INSERT INTO admins (email, password_hash, password_ciphertext, password_updated_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(
+    ADMIN_EMAIL,
+    bcrypt.hashSync(ADMIN_PASSWORD, 12),
+    sealCredential(ADMIN_PASSWORD),
+    now,
+    now,
+    now
+  );
   db.close();
 }
 
@@ -72,13 +83,24 @@ async function waitForReady(timeoutMs = 120000): Promise<void> {
   throw new Error(`Server did not become ready at ${BASE}`);
 }
 
-function cookieValue(setCookieHeader: string | null, name: string): string | null {
-  if (!setCookieHeader) return null;
-  const part = setCookieHeader
-    .split(';')
-    .map((p) => p.trim())
-    .find((p) => p.startsWith(`${name}=`));
-  return part ? part.slice(name.length + 1) : null;
+/**
+ * Read one cookie from a response. A response can set several cookies, and
+ * they arrive joined in a single header, so each set-cookie header is checked
+ * on its own.
+ */
+function cookieValue(response: Response, name: string): string | null {
+  const headers =
+    typeof response.headers.getSetCookie === 'function'
+      ? response.headers.getSetCookie()
+      : [response.headers.get('set-cookie') ?? ''];
+  for (const header of headers) {
+    const part = header
+      .split(';')
+      .map((p) => p.trim())
+      .find((p) => p.startsWith(`${name}=`));
+    if (part) return part.slice(name.length + 1);
+  }
+  return null;
 }
 
 beforeAll(async () => {
@@ -123,9 +145,8 @@ afterAll(async () => {
   if (existsSync(MEDIA_DIR)) rmSync(MEDIA_DIR, { recursive: true });
 });
 
-async function login(): Promise<{ session: string; csrf: string }> {
-  const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
-  const csrf = cookieValue(csrfRes.headers.get('set-cookie'), 'portfolio_csrf') ?? '';
+async function login(): Promise<{ session: string; csrf: string }> {  const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
+  const csrf = cookieValue(csrfRes, 'portfolio_csrf') ?? '';
   const loginRes = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: {
@@ -138,8 +159,8 @@ async function login(): Promise<{ session: string; csrf: string }> {
   if (!loginRes.ok) {
     throw new Error(`Login failed with ${loginRes.status}`);
   }
-  const session = cookieValue(loginRes.headers.get('set-cookie'), 'portfolio_session') ?? '';
-  const sessionCsrf = cookieValue(loginRes.headers.get('set-cookie'), 'portfolio_csrf') ?? csrf;
+  const session = cookieValue(loginRes, 'portfolio_session') ?? '';
+  const sessionCsrf = cookieValue(loginRes, 'portfolio_csrf') ?? csrf;
   return { session, csrf: sessionCsrf };
 }
 
@@ -149,6 +170,21 @@ function authHeaders(session: string, csrf: string) {
     Cookie: `portfolio_session=${session}; portfolio_csrf=${csrf}`,
     'X-CSRF-Token': csrf,
   };
+}
+
+/** Sign in with a given password and return the raw response. */
+async function loginWithPassword(password: string): Promise<Response> {
+  const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
+  const csrf = cookieValue(csrfRes, 'portfolio_csrf') ?? '';
+  return fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: `portfolio_csrf=${csrf}`,
+      'X-CSRF-Token': csrf,
+    },
+    body: JSON.stringify({ email: ADMIN_EMAIL, password }),
+  });
 }
 
 describe('portfolio API integration', () => {
@@ -173,7 +209,7 @@ describe('portfolio API integration', () => {
 
   it('rejects a login with invalid credentials', async () => {
     const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
-    const csrf = cookieValue(csrfRes.headers.get('set-cookie'), 'portfolio_csrf') ?? '';
+    const csrf = cookieValue(csrfRes, 'portfolio_csrf') ?? '';
     const res = await fetch(`${BASE}/api/auth/login`, {
       method: 'POST',
       headers: {
@@ -418,8 +454,85 @@ describe('portfolio API integration', () => {
     expect(removed.status).toBe(200);
   });
 
-  it('validates the contact form and stores the inquiry', async () => {
-    const invalid = await fetch(`${BASE}/api/contact-inquiries`, {
+  it('reveals and changes the administrator password', async () => {
+    const { session, csrf } = await login();
+
+    // The wrong current password is refused.
+    const refused = await fetch(`${BASE}/api/admin/password`, {
+      method: 'POST',
+      headers: authHeaders(session, csrf),
+      body: JSON.stringify({ action: 'reveal', current_password: 'not-the-password' }),
+    });
+    expect(refused.status).toBe(401);
+
+    // The right one reveals the credential.
+    const revealed = await fetch(`${BASE}/api/admin/password`, {
+      method: 'POST',
+      headers: authHeaders(session, csrf),
+      body: JSON.stringify({ action: 'reveal', current_password: ADMIN_PASSWORD }),
+    });
+    expect(revealed.status).toBe(200);
+    const revealedJson = await revealed.json();
+    expect(revealedJson.password).toBe(ADMIN_PASSWORD);
+
+    // A weak new password is refused.
+    const weak = await fetch(`${BASE}/api/admin/password`, {
+      method: 'POST',
+      headers: authHeaders(session, csrf),
+      body: JSON.stringify({
+        action: 'change',
+        current_password: ADMIN_PASSWORD,
+        new_password: 'short1!',
+      }),
+    });
+    expect(weak.status).toBe(400);
+
+    // The password can be changed.
+    const NEW_PASSWORD = 'WinniePortfolio2026!';
+    const changed = await fetch(`${BASE}/api/admin/password`, {
+      method: 'POST',
+      headers: authHeaders(session, csrf),
+      body: JSON.stringify({
+        action: 'change',
+        current_password: ADMIN_PASSWORD,
+        new_password: NEW_PASSWORD,
+      }),
+    });
+    expect(changed.status).toBe(200);
+    const changedJson = await changed.json();
+    expect(changedJson.password).toBe(NEW_PASSWORD);
+
+    // The old password no longer signs in; the new one does.
+    const oldLogin = await loginWithPassword(ADMIN_PASSWORD);
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await loginWithPassword(NEW_PASSWORD);
+    expect(newLogin.status).toBe(200);
+
+    // The new password can be revealed with the new credential.
+    const newSession = cookieValue(newLogin, 'portfolio_session') ?? '';
+    const newCsrf = cookieValue(newLogin, 'portfolio_csrf') ?? '';
+    const revealedAgain = await fetch(`${BASE}/api/admin/password`, {
+      method: 'POST',
+      headers: authHeaders(newSession, newCsrf),
+      body: JSON.stringify({ action: 'reveal', current_password: NEW_PASSWORD }),
+    });
+    expect(revealedAgain.status).toBe(200);
+    expect((await revealedAgain.json()).password).toBe(NEW_PASSWORD);
+
+    // Put the original password back so the suite leaves no trace.
+    await fetch(`${BASE}/api/admin/password`, {
+      method: 'POST',
+      headers: authHeaders(newSession, newCsrf),
+      body: JSON.stringify({
+        action: 'change',
+        current_password: NEW_PASSWORD,
+        new_password: ADMIN_PASSWORD,
+      }),
+    });
+  });
+
+  it('validates the contact form and stores the inquiry', async () => {    const invalid = await fetch(`${BASE}/api/contact-inquiries`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'x', email: 'not-an-email', message: 'short' }),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminCount } from '@/lib/auth';
 import { hashPassword } from '@/lib/auth';
+import { sealCredential } from '@/lib/credential-vault';
 
 export const runtime = 'nodejs';
 
@@ -62,8 +63,16 @@ export async function POST(request: Request) {
   const { db } = await import('@/lib/db');
   const now = new Date().toISOString();
   db.prepare(
-    'INSERT INTO admins (email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?)'
-  ).run(email, passwordHash, now, now);
+    `INSERT INTO admins (email, password_hash, password_ciphertext, password_updated_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(
+    email,
+    passwordHash,
+    sealCredential(password),
+    now,
+    now,
+    now
+  );
 
   return NextResponse.json({
     ok: true,

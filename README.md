@@ -181,10 +181,37 @@ From the admin panel Winnie can:
 - Upload, replace and delete media assets, with drag and drop, upload
   progress and a reference check before deletion
 - Read, mark and delete contact inquiries
+- View her own password and change it
 
 Everything is saved to the database and appears on the public site
 immediately: the public pages are rendered per request, not baked at build
 time.
+
+### Viewing and changing the administrator password
+
+**Profile → Account and password** in the admin panel.
+
+The password is never written to the database in plain text. It is hashed with
+bcrypt for sign-in, and a second copy is *sealed* with AES-256-GCM under a key
+derived from `SESSION_SECRET` — the same pattern a password manager uses for a
+vault. That sealed copy is what the panel reads when you ask to see the
+password, so:
+
+- you have to confirm the current password before it is revealed;
+- the database only ever holds ciphertext, and the key lives in the
+  environment, not in the database;
+- if `SESSION_SECRET` is ever rotated the sealed copy can no longer be opened —
+  the panel says so and offers "set a new password" instead.
+
+Changing the password re-hashes it, re-seals it, signs out every other session
+and shows the new password once so it can be saved in a password manager.
+
+If the password is lost and the panel cannot be used, reset it on the server:
+
+```bash
+RESET_ADMIN=1 ADMIN_EMAIL="winnie@example.com" ADMIN_PASSWORD="…" \
+  node scripts/setup-admin.js
+```
 
 ## Media storage
 
@@ -258,7 +285,10 @@ brief asks for motion used sparingly.
 
 - No administrator account or credentials are seeded. The first administrator
   must be created explicitly.
-- Passwords are hashed with bcrypt (cost 12); never stored plaintext.
+- Passwords are hashed with bcrypt (cost 12); never stored plaintext. A sealed
+  copy (AES-256-GCM, key derived from `SESSION_SECRET`) exists only so the
+  administrator can view her own password, and it is never exposed without the
+  current password.
 - Session and CSRF secrets must be provided via environment variables, never
   committed.
 - Uploads are validated by MIME-type magic bytes on the server; HTML, scripts
