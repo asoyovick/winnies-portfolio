@@ -13,12 +13,36 @@ export function openDatabase(databasePath: string = DB_PATH): Database.Database 
   return database;
 }
 
-// A single synchronous connection per module instance. better-sqlite3 with WAL
-// mode handles concurrent reads well enough for this single-instance site.
+/*
+ * One synchronous connection per module instance. better-sqlite3 with WAL mode
+ * handles concurrent reads well enough for this single-instance site.
+ *
+ * The connection is closed when the process shuts down. Without that, the
+ * native module is finalised after the V8 environment has been torn down and
+ * better-sqlite3 aborts the process with
+ * "Assertion failed: (env) != nullptr".
+ */
 export const db: Database.Database = openDatabase();
 
+let closed = false;
+
 export function closeDatabase(): void {
-  db.close();
+  if (closed) return;
+  closed = true;
+  try {
+    db.close();
+  } catch {
+    // Already closed, or the file was removed underneath us.
+  }
+}
+
+if (typeof process !== 'undefined' && process.versions?.node) {
+  const shutdown = () => closeDatabase();
+  // Not on 'beforeExit': that can fire while the server is still serving.
+  process.once('exit', shutdown);
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+  process.once('SIGHUP', shutdown);
 }
 
 export type AdminUser = {

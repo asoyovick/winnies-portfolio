@@ -288,6 +288,28 @@ brief asks for motion used sparingly.
 6. Configure persistent media storage (`MEDIA_DIR` on a persistent volume,
    or an S3 bucket).
 
+### Notes for a hosted deployment
+
+- **The database and the uploads need a persistent disk.** `data/app.db` and
+  `data/uploads/` live on the machine's filesystem; mount a persistent volume
+  at `data/`, or point `MEDIA_DIR` and `DATABASE_URL` at a mounted path.
+- **`better-sqlite3` is pinned to an exact version** (`11.10.0`). It is a
+  native module, and a different build of it has been seen to abort the
+  process at teardown with
+  `Assertion failed: (env) != nullptr`. The pin keeps the build identical to
+  the one the tests run against.
+- **The database is closed when the process shuts down** (`SIGTERM`, `SIGINT`,
+  `SIGHUP`, `exit`). Without that, the native module is finalised after the
+  V8 environment has been torn down and the process aborts with a core dump.
+- **The route guard does not open the database.** `src/proxy.ts` runs in its
+  own isolate, where a native SQLite handle cannot be finalised safely, so it
+  only checks for the presence of a session cookie. The real check happens in
+  the admin layout and in every admin API route, where the database is
+  already open.
+- `next start` listens on `PORT`, which is what platforms such as Render
+  expect.
+
+
 ## Backups
 
 - **Database:** copy `data/app.db` (and `-wal`/`-shm` if present) to a backup

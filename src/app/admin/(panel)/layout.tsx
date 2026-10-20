@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { getServerAdmin } from '@/lib/admin-helpers';
 import { AdminNav } from '@/components/admin/AdminNav';
 
@@ -12,9 +13,12 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Authentication is enforced by middleware; this layout simply renders the
-  // admin shell for already-authenticated requests.
-  await getServerAdmin();
+  // The session is verified here, where the database is already open. The
+  // proxy only checks that a session cookie is present.
+  const session = await getServerAdmin();
+  if ('redirect' in session) {
+    redirect('/admin/login');
+  }
 
   return (
     <div className="admin-shell">
