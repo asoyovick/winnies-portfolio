@@ -12,6 +12,7 @@ function entryResponse(row: any) {
     description: row.description,
     category: row.category,
     display_order: row.display_order,
+    is_featured: Boolean(row.is_featured),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -50,13 +51,14 @@ export async function POST(request: Request) {
 
   const now = new Date().toISOString();
   const result = db.prepare(
-    `INSERT INTO expertise (title, description, category, display_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO expertise (title, description, category, display_order, is_featured, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     body.title,
     body.description ?? '',
     body.category ?? '',
     Number(body.display_order ?? 0),
+    body.is_featured ? 1 : 0,
     now,
     now
   );
@@ -99,6 +101,7 @@ export async function PUT(request: Request) {
   if (typeof body.description === 'string') allowed.description = body.description;
   if (typeof body.category === 'string') allowed.category = body.category.trim();
   if (typeof body.display_order === 'number') allowed.display_order = body.display_order;
+  if (typeof body.is_featured === 'boolean') allowed.is_featured = body.is_featured ? 1 : 0;
 
   for (const [key, value] of Object.entries(allowed)) {
     fields.push(`${key} = ?`);

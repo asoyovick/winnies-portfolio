@@ -38,3 +38,6 @@ npm-debug.log*
 
 # TypeScript build info
 tsconfig.tsbuildinfo
+
+# Design inspection output
+.taste-skill/

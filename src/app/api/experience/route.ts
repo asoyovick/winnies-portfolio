@@ -15,6 +15,7 @@ function entryResponse(row: any) {
     is_current: Boolean(row.is_current),
     description: row.description,
     responsibilities: JSON.parse(row.responsibilities || '[]'),
+    achievements: JSON.parse(row.achievements || '[]'),
     display_order: row.display_order,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -59,10 +60,11 @@ export async function POST(request: Request) {
   const isCurrent = Boolean(body.is_current);
   const endDate = isCurrent ? null : body.end_date || null;
   const responsibilities = JSON.stringify(body.responsibilities ?? []);
+  const achievements = JSON.stringify(body.achievements ?? []);
 
   const result = db.prepare(
-    `INSERT INTO experience (position, organization, start_date, end_date, is_current, description, responsibilities, display_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO experience (position, organization, start_date, end_date, is_current, description, responsibilities, achievements, display_order, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     body.position,
     body.organization,
@@ -71,6 +73,7 @@ export async function POST(request: Request) {
     isCurrent ? 1 : 0,
     body.description ?? '',
     responsibilities,
+    achievements,
     Number(body.display_order ?? 0),
     now,
     now
@@ -117,6 +120,7 @@ export async function PUT(request: Request) {
   if (typeof body.is_current === 'boolean') allowed.is_current = body.is_current ? 1 : 0;
   if (typeof body.description === 'string') allowed.description = body.description;
   if (Array.isArray(body.responsibilities)) allowed.responsibilities = JSON.stringify(body.responsibilities);
+  if (Array.isArray(body.achievements)) allowed.achievements = JSON.stringify(body.achievements);
   if (typeof body.display_order === 'number') allowed.display_order = body.display_order;
 
   for (const [key, value] of Object.entries(allowed)) {

@@ -31,30 +31,30 @@ const tx = db.transaction(() => {
       professional_title = 'Accounting, Audit & Tax Professional',
       location = 'Kisumu, Kenya',
       biography = '',
-      hero_text = '',
       updated_at = ?
     WHERE id = 1
   `).run(NOW);
 
   const bio = [
     'Winnie Awuor Otieno is an accounting, audit and tax professional based in Kisumu, Kenya.',
-    'She is a Semi Senior in Audit & Consulting at Ronalds LLP (October 2023 to present), where she prepares and reviews VAT, PAYE, withholding tax and corporation tax returns for NGOs, SACCOs and corporate clients, conducts financial audits with a tax focus, and supports clients through KRA compliance checks.',
-    'Earlier, she built commercial foundations as a Sales Person at Home Living Kisumu (2020–2023) — recognised as the most performing Sales Executive in 2021 and 2022 — and worked in revenue debt collection and revenue analysis with the County Government of Kisumu.',
-    'She holds a Bachelor of Science in Economics and Statistics from Egerton University (Second Class Upper Division) and is progressing the Certified Public Accountant (CPA) qualification at Advanced level — the qualification is ongoing and is not yet complete.',
+    'She works as Audit & Consulting Semi Senior at Ronalds LLP, a position she has held since October 2023. Her work covers VAT, PAYE, withholding tax and corporation tax returns for NGOs, SACCOs and corporate clients; financial audits with a tax focus; and the bookkeeping, reconciliations and documentation that keep clients ready for KRA compliance checks.',
+    'Before that she spent three years as a Sales Person at Home Living Kisumu, where she was recognised as the most performing Sales Executive in 2021 and 2022. Earlier still she worked in revenue collection and revenue analysis with the County Government of Kisumu.',
+    'She holds a Bachelor of Science in Economics and Statistics from Egerton University (Second Class Upper Division) and is working towards the Certified Public Accountant qualification at Advanced level. That qualification is still in progress.',
   ].join('\n\n');
 
   db.prepare(`
     UPDATE profile_settings SET biography = ?, updated_at = ? WHERE id = 1
   `).run(bio, NOW);
 
-  const heroText = [
-    'Accounting, audit and tax support for NGOs, SACCOs and corporate clients.',
-    'VAT, PAYE, withholding tax and corporation tax returns, financial audits with a tax focus, bookkeeping and tax advisory.',
+  const heroHeading = ['Clear thinking.', 'Confident decisions.'].join('\n');
+
+  const heroSubheading = [
+    'I work across tax compliance, financial audits and accounting so businesses meet their obligations and understand their finances.',
   ].join(' ');
 
   db.prepare(`
-    UPDATE profile_settings SET hero_text = ?, updated_at = ? WHERE id = 1
-  `).run(heroText, NOW);
+    UPDATE profile_settings SET hero_heading = ?, hero_subheading = ?, updated_at = ? WHERE id = 1
+  `).run(heroHeading, heroSubheading, NOW);
 
   // ---- Experience (reverse chronological, newest first => lowest display_order) ----
   const experience = [
@@ -137,20 +137,20 @@ const tx = db.transaction(() => {
     if (existing) {
       db.prepare(`
         UPDATE experience SET position = ?, organization = ?, start_date = ?, end_date = ?,
-          is_current = ?, description = ?, responsibilities = ?, display_order = ?, updated_at = ?
+          is_current = ?, description = ?, responsibilities = ?, achievements = ?, display_order = ?, updated_at = ?
         WHERE id = ?
       `).run(
         item.position, item.organization, item.start_date, item.end_date, item.is_current,
-        payload, item.display_order, now, existing.id
+        item.description, payload, JSON.stringify(item.achievements ?? []), item.display_order, now, existing.id
       );
     } else {
       db.prepare(`
         INSERT INTO experience (position, organization, start_date, end_date, is_current,
-          description, responsibilities, display_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          description, responsibilities, achievements, display_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         item.position, item.organization, item.start_date, item.end_date, item.is_current,
-        item.description, payload, item.display_order, now, now
+        item.description, payload, JSON.stringify(item.achievements ?? []), item.display_order, now, now
       );
     }
   }
@@ -224,6 +224,7 @@ const tx = db.transaction(() => {
         'VAT, PAYE, withholding tax and corporation tax returns; KRA compliance support; tax planning strategies and deadline management.',
       category: 'Tax',
       display_order: 1,
+      is_featured: true,
     },
     {
       title: 'Tax return preparation',
@@ -231,6 +232,7 @@ const tx = db.transaction(() => {
         'Preparing and reviewing VAT, PAYE, withholding tax and corporation tax returns for NGOs, SACCOs and corporate clients.',
       category: 'Tax',
       display_order: 2,
+      is_featured: true,
     },
     {
       title: 'Financial audit and reporting',
@@ -238,30 +240,35 @@ const tx = db.transaction(() => {
         'Financial audits with a tax focus; identifying tax exposure and recommending corrective measures; preparing supporting documentation and reconciliations.',
       category: 'Audit',
       display_order: 3,
+      is_featured: true,
     },
     {
       title: 'Bookkeeping and tax advisory',
       description: 'Bookkeeping services and tax advisory for clients transitioning to digital tax systems such as iTax.',
       category: 'Advisory',
       display_order: 4,
+      is_featured: true,
     },
     {
       title: 'Financial analysis',
       description: 'Performance analysis, reconciliations and data-driven recommendations that support business decisions.',
       category: 'Analysis',
       display_order: 5,
+      is_featured: true,
     },
     {
       title: 'Client advisory and relationship management',
       description: 'Working with NGOs, SACCOs and corporate clients; handling queries and complaints; building lasting client relationships.',
       category: 'Advisory',
       display_order: 6,
+      is_featured: true,
     },
     {
       title: 'Accounting systems',
       description: 'Xero, QuickBooks Online and Microsoft Excel; supporting clients in the transition to digital tax systems.',
       category: 'Systems',
       display_order: 7,
+      is_featured: false,
     },
   ];
 
@@ -271,14 +278,22 @@ const tx = db.transaction(() => {
       .get(item.title, item.category);
     if (existing) {
       db.prepare(`
-        UPDATE expertise SET description = ?, category = ?, display_order = ?, updated_at = ?
+        UPDATE expertise SET description = ?, category = ?, display_order = ?, is_featured = ?, updated_at = ?
         WHERE id = ?
-      `).run(item.description, item.category, item.display_order, NOW, existing.id);
+      `).run(item.description, item.category, item.display_order, item.is_featured ? 1 : 0, NOW, existing.id);
     } else {
       db.prepare(`
-        INSERT INTO expertise (title, description, category, display_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(item.title, item.description, item.category, item.display_order, NOW, NOW);
+        INSERT INTO expertise (title, description, category, display_order, is_featured, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        item.title,
+        item.description,
+        item.category,
+        item.display_order,
+        item.is_featured ? 1 : 0,
+        NOW,
+        NOW
+      );
     }
   }
 

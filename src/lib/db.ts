@@ -46,7 +46,9 @@ export type ProfileSettings = {
   biography: string;
   location: string;
   public_email: string;
-  hero_text: string;
+  public_phone: string;
+  hero_heading: string;
+  hero_subheading: string;
   cv_media_id: number | null;
   profile_image_id: number | null;
   social_links: string;
@@ -62,6 +64,7 @@ export type ExperienceEntry = {
   is_current: number;
   description: string;
   responsibilities: string;
+  achievements: string;
   display_order: number;
   created_at: string;
   updated_at: string;
@@ -87,6 +90,7 @@ export type ExpertiseEntry = {
   description: string;
   category: string;
   display_order: number;
+  is_featured: number;
   created_at: string;
   updated_at: string;
 };

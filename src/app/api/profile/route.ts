@@ -14,7 +14,9 @@ function profileResponse(row: any) {
     biography: row.biography,
     location: row.location,
     public_email: row.public_email,
-    hero_text: row.hero_text,
+    public_phone: row.public_phone,
+    hero_heading: row.hero_heading,
+    hero_subheading: row.hero_subheading,
     cv_media_id: row.cv_media_id,
     profile_image_id: row.profile_image_id,
     social_links: parseJson(row.social_links, []),
@@ -61,7 +63,9 @@ export async function PUT(request: Request) {
   if (typeof body.biography === 'string') allowed.biography = body.biography;
   if (typeof body.location === 'string') allowed.location = body.location.trim();
   if (typeof body.public_email === 'string') allowed.public_email = body.public_email.trim();
-  if (typeof body.hero_text === 'string') allowed.hero_text = body.hero_text;
+  if (typeof body.public_phone === 'string') allowed.public_phone = body.public_phone.trim();
+  if (typeof body.hero_heading === 'string') allowed.hero_heading = body.hero_heading;
+  if (typeof body.hero_subheading === 'string') allowed.hero_subheading = body.hero_subheading;
   if (typeof body.cv_media_id !== 'undefined') allowed.cv_media_id = body.cv_media_id === null ? null : Number(body.cv_media_id);
   if (typeof body.profile_image_id !== 'undefined') allowed.profile_image_id = body.profile_image_id === null ? null : Number(body.profile_image_id);
   if (Array.isArray(body.social_links)) allowed.social_links = JSON.stringify(body.social_links);
