@@ -45,3 +45,6 @@ tsconfig.tsbuildinfo
 data/test-*.db*
 data/integration.db*
 data/test-uploads/
+
+# Pinterest reference capture kept out of the deployed site
+reference/

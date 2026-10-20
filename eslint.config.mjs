@@ -9,6 +9,7 @@ const eslintConfig = [
       'node_modules/**',
       'data/**',
       'public/**',
+      'reference/**',
       'next-env.d.ts',
     ],
   },

@@ -3,9 +3,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 /**
- * Reveals children once the section enters the viewport. Heading, text and
- * media are staggered. Without JavaScript the content stays visible (no
- * content is hidden behind an animation).
+ * Reveals children once the section reaches the viewport.
+ *
+ * The check runs on every scroll event, not only through an IntersectionObserver:
+ * when a page is scrolled in jumps, sections can be passed over without ever
+ * intersecting the viewport, and they would otherwise stay invisible. Without
+ * JavaScript the content stays visible.
  */
 export function Reveal({
   children,
@@ -20,24 +23,58 @@ export function Reveal({
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setVisible(true);
-            observer.disconnect();
-          }
-        }
-      },
-      { threshold: 0.12 }
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
 
-  const reducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // With reduced motion the stylesheet keeps the content visible, so nothing
+    // needs to be switched on here.
+    let done = false;
+
+    const reveal = () => {
+      if (done) return;
+      done = true;
+      setVisible(true);
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+      observer?.disconnect();
+    };
+
+    const check = () => {
+      const rect = element.getBoundingClientRect();
+      const distance = rect.top - window.innerHeight;
+
+      // It has come into view, or it has been scrolled past in one jump.
+      if (distance < window.innerHeight * 0.92) {
+        reveal();
+        return;
+      }
+
+      // Too far down to animate honestly. Show it now rather than leaving a
+      // hole in the page for content the reader has not reached yet.
+      if (distance > window.innerHeight * 2.5) {
+        reveal();
+      }
+    };
+
+    const observer =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(
+            (entries) => {
+              if (entries.some((entry) => entry.isIntersecting)) reveal();
+            },
+            { threshold: 0 }
+          )
+        : null;
+
+    observer?.observe(element);
+    window.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    check();
+
+    return () => {
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+      observer?.disconnect();
+    };
+  }, []);
 
   return (
     <div ref={ref} className="reveal-wrapper">
@@ -46,9 +83,7 @@ export function Reveal({
         return (
           <div
             key={index}
-            className={`reveal-item ${
-              visible || reducedMotion ? 'reveal-item--visible' : ''
-            }`}
+            className={`reveal-item${visible ? ' reveal-item--visible' : ''}`}
             style={{
               transitionDelay: `${index * stagger}ms`,
             }}

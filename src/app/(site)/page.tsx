@@ -2,6 +2,7 @@ import Hero from '@/components/Hero';
 import About from '@/components/About';
 import Place from '@/components/Place';
 import Expertise from '@/components/Expertise';
+import TaxMap from '@/components/TaxMap';
 import Experience from '@/components/Experience';
 import Education from '@/components/Education';
 import Tools from '@/components/Tools';
@@ -62,6 +63,7 @@ export default function Page() {
       <About />
       <Place />
       <Expertise />
+      <TaxMap />
       <Experience />
       <Education />
       <Tools />
