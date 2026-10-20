@@ -16,10 +16,19 @@ export function readCsrfToken(): string {
 
 export async function refreshCsrfToken(): Promise<string> {
   const response = await fetch('/api/auth/csrf', { cache: 'no-store' });
-  const json = await response.json().catch(() => ({}));
-  if (json?.ok) return readCsrfToken();
+  const json: unknown = await response.json().catch(() => null);
+  if (json && typeof json === 'object' && 'ok' in json && json.ok) {
+    return readCsrfToken();
+  }
   return '';
 }
+
+export type AdminResult<T> = {
+  ok: boolean;
+  status: number;
+  data: T | null;
+  error: string;
+};
 
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -28,10 +37,19 @@ type RequestOptions = {
   signal?: AbortSignal;
 };
 
-export async function adminRequest<T = any>(
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function readError(payload: unknown, fallback: string): string {
+  if (isRecord(payload) && typeof payload.error === 'string') return payload.error;
+  return fallback;
+}
+
+export async function adminRequest<T = unknown>(
   path: string,
   options: RequestOptions = {}
-): Promise<{ ok: boolean; status: number; data: T | null; error: string }> {
+): Promise<AdminResult<T>> {
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = {};
 
@@ -52,7 +70,7 @@ export async function adminRequest<T = any>(
   try {
     const response = await fetch(path, { method, headers, body, signal: options.signal });
     const text = await response.text();
-    let data: any = null;
+    let data: unknown = null;
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
@@ -61,22 +79,26 @@ export async function adminRequest<T = any>(
     return {
       ok: response.ok,
       status: response.status,
-      data,
-      error: response.ok ? '' : data?.error || `Request failed (${response.status}).`,
+      data: data as T | null,
+      error: response.ok ? '' : readError(data, `Request failed (${response.status}).`),
     };
   } catch {
     return { ok: false, status: 0, data: null, error: 'Could not reach the server.' };
   }
 }
 
+export type UploadResult = {
+  ok: boolean;
+  status: number;
+  data: { id: number; public_url: string; original_name: string } | null;
+  error: string;
+};
+
 /**
  * Upload with progress reporting. The admin API accepts multipart form data,
  * and XHR is the only browser API that reports upload progress.
  */
-export function uploadFile(
-  file: File,
-  onProgress: (percent: number) => void
-): Promise<{ ok: boolean; status: number; data: any; error: string }> {
+export function uploadFile(file: File, onProgress: (percent: number) => void): Promise<UploadResult> {
   return new Promise((resolve) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -95,20 +117,18 @@ export function uploadFile(
     });
 
     request.addEventListener('load', () => {
-      let data: any = null;
+      let data: unknown = null;
       try {
         data = JSON.parse(request.responseText);
       } catch {
         data = null;
       }
+      const ok = request.status >= 200 && request.status < 300;
       resolve({
-        ok: request.status >= 200 && request.status < 300,
+        ok,
         status: request.status,
-        data,
-        error:
-          request.status >= 200 && request.status < 300
-            ? ''
-            : data?.error || `Upload failed (${request.status}).`,
+        data: ok && isRecord(data) ? (data as UploadResult['data']) : null,
+        error: ok ? '' : readError(data, `Upload failed (${request.status}).`),
       });
     });
 
@@ -119,4 +139,3 @@ export function uploadFile(
     request.send(formData);
   });
 }
-

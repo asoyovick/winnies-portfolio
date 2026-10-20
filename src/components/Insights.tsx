@@ -40,7 +40,7 @@ export default function Insights() {
               ) : null}
               <p className="insights__note">
                 Have a question about any of them?{' '}
-                <a href="/#contact">Ask in the contact form</a>.
+                <Link href="/#contact">Ask in the contact form</Link>.
               </p>
             </div>
           ) : (

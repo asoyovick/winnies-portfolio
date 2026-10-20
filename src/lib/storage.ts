@@ -53,10 +53,10 @@ type GetObjectOutput = import('@aws-sdk/client-s3').GetObjectCommandOutput;
 
 let s3Client: S3Client | null = null;
 
-function getS3Client(): S3Client {
+async function getS3Client(): Promise<S3Client> {
   if (!s3Client) {
-    // Lazy require so the module loads when S3 is not configured.
-    const { S3Client } = require('@aws-sdk/client-s3');
+    // Imported on demand so the module is not loaded when S3 is not configured.
+    const { S3Client } = await import('@aws-sdk/client-s3');
     s3Client = new S3Client({
       region: S3_REGION,
       endpoint: S3_ENDPOINT,
@@ -68,7 +68,7 @@ function getS3Client(): S3Client {
       forcePathStyle: !S3_ENDPOINT?.includes('amazonaws.com'),
     });
   }
-  return s3Client as S3Client;
+  return s3Client;
 }
 
 function safeExtension(originalName: string, mimeType: string): string {
@@ -100,7 +100,9 @@ async function ensureLocalDir(): Promise<void> {
 }
 
 function localPath(storageName: string): string {
-  return join(MEDIA_DIR, storageName);
+  // The directory is configurable at runtime, so it is resolved at request time
+  // rather than traced into the build output.
+  return join(/* turbopackIgnore: true */ MEDIA_DIR, storageName);
 }
 
 export function assetPublicUrl(storageName: string): string {
@@ -144,8 +146,8 @@ export async function storeFile({
   const storageName = safeStorageName(originalName, mimeType);
 
   if (USE_S3) {
-    const { PutObjectCommand } = require('@aws-sdk/client-s3');
-    await getS3Client().send(
+    const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+    await (await getS3Client()).send(
       new PutObjectCommand({
         Bucket: S3_BUCKET,
         Key: storageName,
@@ -187,8 +189,8 @@ export async function getFileStream(storageName: string): Promise<{
   originalName: string;
 }> {
   if (USE_S3) {
-    const { GetObjectCommand } = require('@aws-sdk/client-s3');
-    const output = (await getS3Client().send(
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const output = (await (await getS3Client()).send(
       new GetObjectCommand({ Bucket: S3_BUCKET!, Key: storageName })
     )) as GetObjectOutput;
     return {
@@ -215,16 +217,17 @@ export async function getFileStream(storageName: string): Promise<{
 
 export async function deleteFile(storageName: string): Promise<void> {
   if (USE_S3) {
-    const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
-    await getS3Client().send(
+    const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    await (await getS3Client()).send(
       new DeleteObjectCommand({ Bucket: S3_BUCKET!, Key: storageName })
     );
     return;
   }
   try {
     await fs.unlink(localPath(storageName));
-  } catch (error: any) {
-    if (error.code !== 'ENOENT') throw error;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') throw error;
   }
 }
 

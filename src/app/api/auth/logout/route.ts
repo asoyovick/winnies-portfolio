@@ -9,7 +9,7 @@ import {
 
 export const runtime = 'nodejs';
 
-export async function POST(_request: Request) {
+export async function POST() {
   const production = process.env.NODE_ENV === 'production';
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;

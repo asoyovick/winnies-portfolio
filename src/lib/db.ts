@@ -6,10 +6,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
 const DB_PATH = process.env.DATABASE_URL || join(PROJECT_ROOT, 'data', 'app.db');
 
-// A single synchronous connection per module instance. better-sqlite3 with WAL
-// mode handles concurrent reads well enough for this single-instance site.
-export let db: Database.Database;
-
 export function openDatabase(databasePath: string = DB_PATH): Database.Database {
   const database = new Database(databasePath);
   database.pragma('journal_mode = WAL');
@@ -17,7 +13,9 @@ export function openDatabase(databasePath: string = DB_PATH): Database.Database 
   return database;
 }
 
-db = openDatabase();
+// A single synchronous connection per module instance. better-sqlite3 with WAL
+// mode handles concurrent reads well enough for this single-instance site.
+export const db: Database.Database = openDatabase();
 
 export function closeDatabase(): void {
   db.close();

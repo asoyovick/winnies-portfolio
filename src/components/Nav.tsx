@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const LINKS = [
@@ -55,19 +56,19 @@ export function Nav() {
         }`}
       >
         <div className="wrap nav-inner">
-          <a href="/#home" className="wordmark" onClick={close}>
+          <Link href="/#home" className="wordmark" onClick={close}>
             Winnie Awuor Otieno
-          </a>
+          </Link>
           <nav className="nav-links" aria-label="Main navigation">
             {LINKS.map((link) => (
-              <a key={link.href} href={`/${link.href}`} className="nav-link">
+              <Link key={link.href} href={`/${link.href}`} className="nav-link">
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
-          <a href="/#contact" className="btn btn--nav">
+          <Link href="/#contact" className="btn btn--nav">
             Get in touch
-          </a>
+          </Link>
           <button
             ref={toggleRef}
             className="nav-toggle"
@@ -91,15 +92,15 @@ export function Nav() {
           <div className="mobile-sheet__inner">
             <ul className="mobile-sheet__list">
               <li>
-                <a href="/#home" className="mobile-link" onClick={close}>
+                <Link href="/#home" className="mobile-link" onClick={close}>
                   Home
-                </a>
+                </Link>
               </li>
               {LINKS.map((link) => (
                 <li key={link.href}>
-                  <a href={`/${link.href}`} className="mobile-link" onClick={close}>
+                  <Link href={`/${link.href}`} className="mobile-link" onClick={close}>
                     {link.label}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>

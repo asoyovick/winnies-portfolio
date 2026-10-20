@@ -53,8 +53,14 @@ export function MediaPicker({
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    adminRequest<MediaAsset[]>('/api/media').then((result) => {
+      if (active && result.ok && result.data) setAssets(result.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const selected = assets.find((asset) => asset.id === value) ?? null;
 

@@ -31,10 +31,6 @@ export function AdminNav() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
@@ -79,15 +75,23 @@ export function AdminNav() {
                   className={`admin-sheet__link${
                     isActive(pathname, item.href) ? ' admin-sheet__link--active' : ''
                   }`}
+                  onClick={() => setOpen(false)}
                 >
                   {item.label}
                 </Link>
               </li>
             ))}
           </ul>
-          <a href="/admin/login?action=logout" className="admin-sheet__link">
+          <Link href="/" className="admin-sheet__link" onClick={() => setOpen(false)}>
+            View website
+          </Link>
+          <Link
+            href="/admin/login?action=logout"
+            className="admin-sheet__link"
+            onClick={() => setOpen(false)}
+          >
             Sign out
-          </a>
+          </Link>
         </div>
       ) : null}
 
@@ -113,12 +117,12 @@ export function AdminNav() {
           ))}
         </nav>
         <div className="admin-sidebar__footer">
-          <a href="/" className="admin-sidebar__logout">
+          <Link href="/" className="admin-sidebar__logout">
             View website
-          </a>
-          <a href="/admin/login?action=logout" className="admin-sidebar__logout">
+          </Link>
+          <Link href="/admin/login?action=logout" className="admin-sidebar__logout">
             Sign out
-          </a>
+          </Link>
         </div>
       </aside>
     </>

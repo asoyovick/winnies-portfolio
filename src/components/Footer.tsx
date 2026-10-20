@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getMediaAsset, getProfile } from '@/lib/content';
 import { parseJson } from '@/lib/validation';
 
@@ -37,9 +38,9 @@ export default function Footer() {
             {profile?.location ? (
               <p className="footer__brand-location">{profile.location}</p>
             ) : null}
-            <a href="/#contact" className="btn footer__button">
+            <Link href="/#contact" className="btn footer__button">
               Get in touch
-            </a>
+            </Link>
           </div>
 
           <div className="footer__groups">
@@ -49,13 +50,13 @@ export default function Footer() {
               </h2>
               <ul className="footer__group-list">
                 <li>
-                  <a href="/#about">About</a>
+                  <Link href="/#about">About</Link>
                 </li>
                 <li>
-                  <a href="/#experience">Experience</a>
+                  <Link href="/#experience">Experience</Link>
                 </li>
                 <li>
-                  <a href="/#expertise">Expertise</a>
+                  <Link href="/#expertise">Expertise</Link>
                 </li>
               </ul>
             </nav>
@@ -66,7 +67,7 @@ export default function Footer() {
               </h2>
               <ul className="footer__group-list">
                 <li>
-                  <a href="/#insights">Professional insights</a>
+                  <Link href="/#insights">Professional insights</Link>
                 </li>
                 {cvUrl ? (
                   <li>
