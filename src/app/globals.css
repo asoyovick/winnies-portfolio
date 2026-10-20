@@ -1489,6 +1489,15 @@ select {
 .admin-table a:hover {
   text-decoration: underline;
 }
+/* Actions sit next to each other in a cell and need room between them. */
+.admin-table .btn--text {
+  padding: 0.2rem 0.4rem;
+}
+.admin-table .btn--text + .btn--text,
+.admin-table .btn--text + a,
+.admin-table a + .btn--text {
+  margin-left: 0.35rem;
+}
 .admin-badge {
   display: inline-block;
   font-size: 0.75rem;
