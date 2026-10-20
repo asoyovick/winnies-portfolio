@@ -1,115 +1,26 @@
-'use client';
+import { getMediaAsset, getProfile } from '@/lib/content';
+import { NavBar } from './NavBar';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-
-const LINKS = [
-  { href: '#about', label: 'About' },
-  { href: '#expertise', label: 'Expertise' },
-  { href: '#experience', label: 'Experience' },
-  { href: '#insights', label: 'Insights' },
-  { href: '#contact', label: 'Contact' },
-];
-
+/**
+ * The navigation.
+ *
+ * The brand mark is Winnie's own photograph when she has uploaded one. The
+ * picture is read from the profile settings here, on the server, and only the
+ * address of the file is handed to the browser.
+ */
 export function Nav() {
-  const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const toggleRef = useRef<HTMLButtonElement>(null);
+  const profile = getProfile();
 
-  // The hero sits on a dark field, so the bar is transparent and light while
-  // the page is at the top of the homepage. Everywhere else — and after the
-  // first scroll — it becomes a solid bar in the page colour.
-  const overHero = pathname === '/' && !scrolled;
+  let pictureUrl: string | null = null;
+  if (profile?.profile_image_id) {
+    const asset = getMediaAsset(profile.profile_image_id);
+    if (asset) {
+      pictureUrl = `/api/media/${asset.storage_name
+        .split('/')
+        .map(encodeURIComponent)
+        .join('/')}`;
+    }
+  }
 
-  const close = useCallback(() => setOpen(false), []);
-
-  useEffect(() => {
-    const handle = () => setScrolled(window.scrollY > 24);
-    handle();
-    window.addEventListener('scroll', handle, { passive: true });
-    return () => window.removeEventListener('scroll', handle);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        close();
-        toggleRef.current?.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, [open, close]);
-
-  return (
-    <>
-      <header
-        className={`site-header${overHero ? ' site-header--over-hero' : ''}${
-          scrolled ? ' site-header--solid' : ''
-        }`}
-      >
-        <div className="wrap nav-inner">
-          <Link href="/#home" className="wordmark" onClick={close}>
-            Winnie Awuor Otieno
-          </Link>
-          <nav className="nav-links" aria-label="Main navigation">
-            {LINKS.map((link) => (
-              <Link key={link.href} href={`/${link.href}`} className="nav-link">
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-          <Link href="/#contact" className="btn btn--nav">
-            Get in touch
-          </Link>
-          <button
-            ref={toggleRef}
-            className="nav-toggle"
-            aria-expanded={open}
-            aria-controls="mobile-menu"
-            onClick={() => setOpen((o) => !o)}
-          >
-            {open ? 'Close' : 'Menu'}
-          </button>
-        </div>
-      </header>
-
-      {open ? (
-        <div
-          id="mobile-menu"
-          className="mobile-sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Site navigation"
-        >
-          <div className="mobile-sheet__inner">
-            <ul className="mobile-sheet__list">
-              <li>
-                <Link href="/#home" className="mobile-link" onClick={close}>
-                  Home
-                </Link>
-              </li>
-              {LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link href={`/${link.href}`} className="mobile-link" onClick={close}>
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <button type="button" className="mobile-link mobile-link--close" onClick={close}>
-              Close menu
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
+  return <NavBar pictureUrl={pictureUrl} />;
 }

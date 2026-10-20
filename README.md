@@ -61,11 +61,11 @@ and a band across the foot of the screen carries the tagline, Winnie's
 position and the three main areas of work.
 
 The picture is **Winnie's own photograph** as soon as she uploads one in
-**Profile → Profile photograph** — it is then the background of the hero,
-positioned so she sits to the right of the statement. Until then the hero
-uses a photograph of Kisumu, the town her practice is based in, credited in
-the footer. No photograph of Winnie is invented, and no unrelated stock
-photography is used.
+**Profile → Profile picture** — it is then used in the navigation and as the
+background of the hero, positioned so she sits to the right of the statement.
+Until then the hero uses a photograph of Kisumu, the town her practice is
+based in, credited in the footer. No photograph of Winnie is invented, and no
+unrelated stock photography is used.
 
 House rules applied throughout: the headline never runs past two lines at any
 width, one type family, one accent, no gradients, no decorative rules, no
@@ -197,7 +197,9 @@ From the admin panel Winnie can:
 - Upload, replace and delete media assets, with drag and drop, upload
   progress and a reference check before deletion
 - Read, mark and delete contact inquiries
-- View her own password and change it
+- View and change her own password
+- Upload, replace and remove her profile picture, which appears in the
+  navigation and behind the hero
 
 Everything is saved to the database and appears on the public site
 immediately: the public pages are rendered per request, not baked at build
@@ -233,16 +235,41 @@ RESET_ADMIN=1 ADMIN_EMAIL="winnie@example.com" ADMIN_PASSWORD="…" \
 
 Uploads are stored persistently in `MEDIA_DIR` (`data/uploads` by default),
 which survives application restarts and redeploys. Do not rely on a temporary
-directory.
+directory. The layout is:
+
+```
+data/uploads/
+  profile/<generated-name>.png   Winnie's profile picture
+  <generated-name>.pdf           other uploads
+```
+
+The folder is created automatically the first time something is uploaded.
 
 For production object storage, set the `S3_*` variables. Uploads then go to
-an S3-compatible bucket instead of the local filesystem. Storage credentials
-are read only on the server and are never exposed to the browser.
+an S3-compatible bucket instead of the local filesystem, with the same folder
+layout. Storage credentials are read only on the server and are never exposed
+to the browser.
 
 Uploads are validated by file signature, not by extension: JPEG, PNG, WebP
-images and PDF documents up to 10 MB are accepted, and everything else —
-scripts, HTML, executables, mislabelled files — is rejected. Stored files get
-an unguessable name.
+images and PDF documents are accepted (profile pictures up to 5 MB, other
+uploads up to 10 MB), and everything else — scripts, HTML, executables,
+mislabelled files — is rejected. Stored files get an unguessable name, and
+the storage key is checked before anything is read, so a request can never
+reach outside the storage directory.
+
+### The profile picture
+
+Winnie manages her picture in **Profile → Profile picture** in the admin
+panel: upload a new one, pick one already in the media library, replace it, or
+remove it. The picture is then shown in the navigation of the website (and as
+the background of the hero), with her initials as the fallback when there is
+no picture.
+
+The image file itself is never put in the database. The database holds the
+asset's metadata — name, storage key, type, size, upload time — and the
+profile holds the reference to it. The address shown to visitors is always
+the public path (`/api/media/profile/…`), never a path on the server.
+
 
 ## Contact form
 

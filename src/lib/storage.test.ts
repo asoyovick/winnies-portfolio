@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { validateFileBuffer, MAX_FILE_SIZE } from './storage';
+import {
+  validateFileBuffer,
+  validateProfileImageBuffer,
+  isSafeStorageKey,
+  MAX_FILE_SIZE,
+  MAX_PROFILE_IMAGE_SIZE,
+} from './storage';
 
 // Minimal valid file signatures (magic bytes) plus enough trailing bytes for
 // file-type to confirm the format.
@@ -76,5 +82,44 @@ describe('validateFileBuffer', () => {
   it('detects JPEG by signature regardless of extension', async () => {
     const result = await validateFileBuffer(jpegBytes, 'photo.txt');
     expect(result.mimeType).toBe('image/jpeg');
+  });
+});
+
+describe('validateProfileImageBuffer', () => {
+  it('accepts an image', async () => {
+    const result = await validateProfileImageBuffer(pngBytes, 'winnie.png');
+    expect(result.mimeType).toBe('image/png');
+  });
+
+  it('refuses a document', async () => {
+    await expect(
+      validateProfileImageBuffer(pdfBytes, 'cv.pdf')
+    ).rejects.toThrow(/must be an image/);
+  });
+
+  it('refuses a file over the profile picture limit', async () => {
+    const big = Buffer.alloc(MAX_PROFILE_IMAGE_SIZE + 1);
+    await expect(validateProfileImageBuffer(big, 'big.png')).rejects.toThrow(
+      /too large/
+    );
+  });
+});
+
+describe('isSafeStorageKey', () => {
+  it('accepts a generated file name', () => {
+    expect(isSafeStorageKey('a44da932d16b.png')).toBe(true);
+  });
+
+  it('accepts a file inside a folder', () => {
+    expect(isSafeStorageKey('profile/a44da932d16b.png')).toBe(true);
+  });
+
+  it('refuses anything that could walk out of the storage directory', () => {
+    expect(isSafeStorageKey('../package.json')).toBe(false);
+    expect(isSafeStorageKey('profile/../../package.json')).toBe(false);
+    expect(isSafeStorageKey('/etc/passwd')).toBe(false);
+    expect(isSafeStorageKey('profile\\..\\secret')).toBe(false);
+    expect(isSafeStorageKey('profile/a b.png')).toBe(false);
+    expect(isSafeStorageKey('')).toBe(false);
   });
 });

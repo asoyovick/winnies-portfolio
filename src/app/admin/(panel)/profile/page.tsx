@@ -4,9 +4,19 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MediaPicker } from '@/components/admin/MediaPicker';
 import { PasswordPanel } from '@/components/admin/PasswordPanel';
+import { ProfilePicturePanel } from '@/components/admin/ProfilePicturePanel';
 import { adminRequest, refreshCsrfToken } from '@/lib/admin-client';
 
 type SocialLink = { label: string; url: string };
+
+type Picture = {
+  id: number;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+  public_url: string;
+};
 
 type Profile = {
   id: number;
@@ -20,6 +30,7 @@ type Profile = {
   hero_subheading: string;
   cv_media_id: number | null;
   profile_image_id: number | null;
+  profile_image: Picture | null;
   social_links: SocialLink[];
   updated_at: string;
 };
@@ -38,7 +49,7 @@ const EMPTY = {
 export default function ProfilePage() {
   const [values, setValues] = useState(EMPTY);
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
-  const [photoId, setPhotoId] = useState<number | null>(null);
+  const [picture, setPicture] = useState<Picture | null>(null);
   const [cvId, setCvId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,7 +76,7 @@ export default function ProfilePage() {
         setSocialLinks(
           Array.isArray(result.data.social_links) ? result.data.social_links : []
         );
-        setPhotoId(result.data.profile_image_id ?? null);
+        setPicture(result.data.profile_image ?? null);
         setCvId(result.data.cv_media_id ?? null);
       } else {
         setError(result.error);
@@ -87,7 +98,6 @@ export default function ProfilePage() {
       method: 'PUT',
       body: {
         ...values,
-        profile_image_id: photoId,
         cv_media_id: cvId,
         social_links: socialLinks.filter((link) => link.label.trim() || link.url.trim()),
       },
@@ -136,7 +146,6 @@ export default function ProfilePage() {
       <form className="admin-form" onSubmit={handleSubmit} noValidate>
         <fieldset className="admin-group">
           <legend className="admin-group__legend">Identity</legend>
-
           <div className="field">
             <label htmlFor="pf-display-name">Display name</label>
             <input
@@ -171,6 +180,8 @@ export default function ProfilePage() {
           </div>
         </fieldset>
 
+        <ProfilePicturePanel current={picture} onChanged={setPicture} />
+
         <fieldset className="admin-group">
           <legend className="admin-group__legend">Hero</legend>
 
@@ -203,13 +214,10 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          <MediaPicker
-            label="Profile photograph"
-            help="Shown on the right of the hero. Leave empty to use the positioning panel instead."
-            kind="image"
-            value={photoId}
-            onChange={setPhotoId}
-          />
+          <p className="admin-form__help">
+            The hero uses your profile picture as its background when there is
+            one. Without a picture it shows a photograph of Kisumu.
+          </p>
         </fieldset>
 
         <fieldset className="admin-group">

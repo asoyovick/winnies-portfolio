@@ -2,8 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
 import { createServer } from 'net';
 import { readFileSync, readdirSync, rmSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join, dirname } from 'path';import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import { sealCredential } from '@/lib/credential-vault';
@@ -454,8 +453,154 @@ describe('portfolio API integration', () => {
     expect(removed.status).toBe(200);
   });
 
-  it('reveals and changes the administrator password', async () => {
+  it('uploads, replaces and removes the profile picture', async () => {
     const { session, csrf } = await login();
+    const headers = authHeaders(session, csrf);
+
+    // A valid PNG.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+
+    const uploadForm = new FormData();
+    uploadForm.append(
+      'file',
+      new Blob([png], { type: 'image/png' }),
+      'winnie.png'
+    );
+
+    const uploaded = await fetch(`${BASE}/api/profile/picture`, {
+      method: 'POST',
+      headers: {
+        Cookie: `portfolio_session=${session}; portfolio_csrf=${csrf}`,
+        'X-CSRF-Token': csrf,
+      },
+      body: uploadForm,
+    });
+    expect(uploaded.status).toBe(200);
+    const uploadedJson = await uploaded.json();
+    expect(uploadedJson.asset.mime_type).toBe('image/png');
+    expect(uploadedJson.profile.profile_image_id).toBe(uploadedJson.asset.id);
+
+    // The file lives in the storage directory, not in the database.
+    const stored = join(MEDIA_DIR, 'profile');
+    const files = existsSync(stored) ? readdirSync(stored) : [];
+    expect(files.length).toBe(1);
+    expect(files[0]).toMatch(/\.png$/);
+
+    // The database holds only the reference and the metadata.
+    const profile = await fetch(`${BASE}/api/profile`, {
+      headers: { Cookie: `portfolio_session=${session}` },
+    }).then((r) => r.json());
+    expect(profile.profile_image.public_url).toContain('/api/media/profile/');
+    expect(JSON.stringify(profile)).not.toContain('base64');
+    expect(JSON.stringify(profile)).not.toContain('data:image');
+
+    // The public navigation shows it.
+    const home = await fetch(`${BASE}/`).then((r) => r.text());
+    expect(home).toContain('nav__picture');
+
+    // The file is served.
+    const served = await fetch(`${BASE}${profile.profile_image.public_url}`);
+    expect(served.status).toBe(200);
+    expect(served.headers.get('content-type')).toBe('image/png');
+
+    // Replacing it leaves one file behind, not two.
+    const secondForm = new FormData();
+    secondForm.append(
+      'file',
+      new Blob([png], { type: 'image/png' }),
+      'winnie-2.png'
+    );
+    const replaced = await fetch(`${BASE}/api/profile/picture`, {
+      method: 'POST',
+      headers: {
+        Cookie: `portfolio_session=${session}; portfolio_csrf=${csrf}`,
+        'X-CSRF-Token': csrf,
+      },
+      body: secondForm,
+    });
+    expect(replaced.status).toBe(200);
+    expect(readdirSync(stored).length).toBe(1);
+
+    // The new picture is the one on the public site, with no redeployment.
+    const afterReplace = await fetch(`${BASE}/`).then((r) => r.text());
+    const currentUrl = (await fetch(`${BASE}/api/profile`, {
+      headers: { Cookie: `portfolio_session=${session}` },
+    }).then((r) => r.json())).profile_image.public_url;
+    expect(afterReplace).toContain(encodeURIComponent(currentUrl));
+
+    // Removing it clears the profile and deletes the file.
+    const removed = await fetch(`${BASE}/api/profile/picture`, {
+      method: 'DELETE',
+      headers,
+    });
+    expect(removed.status).toBe(200);
+    expect(readdirSync(stored).length).toBe(0);
+
+    const afterRemove = await fetch(`${BASE}/api/profile`, {
+      headers: { Cookie: `portfolio_session=${session}` },
+    }).then((r) => r.json());
+    expect(afterRemove.profile_image).toBeNull();
+    expect(afterRemove.profile_image_id).toBeNull();
+
+    // The navigation falls back to her initials.
+    const homeAfter = await fetch(`${BASE}/`).then((r) => r.text());
+    expect(homeAfter).toContain('nav__mark');
+    expect(homeAfter).not.toContain('nav__picture');
+  });
+
+  it('refuses an unusable profile picture', async () => {
+    const { session, csrf } = await login();
+
+    // Not an image.
+    const notAnImage = new FormData();
+    notAnImage.append(
+      'file',
+      new Blob([Buffer.from('<html>not a picture</html>')], { type: 'image/png' }),
+      'fake.png'
+    );
+    const rejected = await fetch(`${BASE}/api/profile/picture`, {
+      method: 'POST',
+      headers: {
+        Cookie: `portfolio_session=${session}; portfolio_csrf=${csrf}`,
+        'X-CSRF-Token': csrf,
+      },
+      body: notAnImage,
+    });
+    expect(rejected.status).toBe(400);
+
+    // Too large.
+    const tooBig = new FormData();
+    tooBig.append(
+      'file',
+      new Blob([Buffer.alloc(6 * 1024 * 1024)], { type: 'image/png' }),
+      'big.png'
+    );
+    const oversized = await fetch(`${BASE}/api/profile/picture`, {
+      method: 'POST',
+      headers: {
+        Cookie: `portfolio_session=${session}; portfolio_csrf=${csrf}`,
+        'X-CSRF-Token': csrf,
+      },
+      body: tooBig,
+    });
+    expect(oversized.status).toBe(400);
+
+    // Signed out.
+    const anonymous = await fetch(`${BASE}/api/profile/picture`, {
+      method: 'POST',
+      body: new FormData(),
+    });
+    expect(anonymous.status).toBe(401);
+
+    // Nothing was stored by any of those attempts.
+    const stored = join(MEDIA_DIR, 'profile');
+    expect(existsSync(stored) ? readdirSync(stored).length : 0).toBe(0);
+  });
+
+  it('reveals and changes the administrator password', async () => {    const { session, csrf } = await login();
 
     // The wrong current password is refused.
     const refused = await fetch(`${BASE}/api/admin/password`, {

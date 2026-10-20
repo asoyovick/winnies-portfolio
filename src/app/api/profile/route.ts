@@ -3,10 +3,19 @@ import { cookies } from 'next/headers';
 import { validateCsrfToken, requireAdmin } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { parseJson } from '@/lib/validation';
+import { assetPublicUrl } from '@/lib/storage';
 
 export const runtime = 'nodejs';
 
 function profileResponse(row: any) {
+  const picture = row.profile_image_id
+    ? (db
+        .prepare(
+          'SELECT id, original_name, mime_type, size, storage_name, created_at FROM media WHERE id = ?'
+        )
+        .get(row.profile_image_id) as any | undefined)
+    : undefined;
+
   return {
     id: row.id,
     display_name: row.display_name,
@@ -19,6 +28,16 @@ function profileResponse(row: any) {
     hero_subheading: row.hero_subheading,
     cv_media_id: row.cv_media_id,
     profile_image_id: row.profile_image_id,
+    profile_image: picture
+      ? {
+          id: picture.id,
+          original_name: picture.original_name,
+          mime_type: picture.mime_type,
+          size: picture.size,
+          created_at: picture.created_at,
+          public_url: assetPublicUrl(picture.storage_name),
+        }
+      : null,
     social_links: parseJson(row.social_links, []),
     updated_at: row.updated_at,
   };
