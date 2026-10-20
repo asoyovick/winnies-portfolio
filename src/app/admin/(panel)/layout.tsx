@@ -1,5 +1,11 @@
+import type { Metadata } from 'next';
 import { getServerAdmin } from '@/lib/admin-helpers';
 import { AdminNav } from '@/components/admin/AdminNav';
+
+// The administration area must never appear in a search result.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLayout({
   children,
