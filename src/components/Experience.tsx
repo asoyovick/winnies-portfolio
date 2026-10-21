@@ -2,8 +2,8 @@ import { getExperience, formatDateRange } from '@/lib/content';
 import { parseJson } from '@/lib/validation';
 import { Reveal } from './Reveal';
 
-export default function Experience() {
-  const items = getExperience().map((item) => ({
+export default async function Experience() {
+  const items = (await getExperience()).map((item) => ({
     ...item,
     responsibilities: parseJson(item.responsibilities, [] as string[]),
     achievements: parseJson(item.achievements, [] as string[]),

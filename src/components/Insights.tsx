@@ -2,9 +2,9 @@ import { getExpertise, getPublishedArticles } from '@/lib/content';
 import Link from 'next/link';
 import { Reveal } from './Reveal';
 
-export default function Insights() {
-  const articles = getPublishedArticles();
-  const areas = getExpertise().slice(0, 6);
+export default async function Insights() {
+  const articles = await getPublishedArticles();
+  const areas = (await getExpertise()).slice(0, 6);
 
   return (
     <section id="insights" className="section" aria-labelledby="insights-heading">

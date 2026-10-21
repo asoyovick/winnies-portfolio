@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getMediaAsset, getProfile } from '@/lib/content';
+import { assetPublicUrl } from '@/lib/storage';
 import { parseJson } from '@/lib/validation';
 
 type SocialLink = { label: string; url: string };
@@ -11,20 +12,21 @@ type SocialLink = { label: string; url: string };
  * groups, a simple brand treatment and small legal text. Only contact details
  * Winnie has approved for publication are shown.
  */
-export default function Footer() {
-  const profile = getProfile();
+export default async function Footer() {
+  const profile = await getProfile();
 
   const socialLinks: SocialLink[] = parseJson<SocialLink[]>(
     profile?.social_links ?? null,
     []
   );
 
-  const cvUrl = (() => {
-    if (!profile?.cv_media_id) return null;
-    const asset = getMediaAsset(profile.cv_media_id);
-    if (!asset) return null;
-    return `/api/media/${encodeURIComponent(asset.storage_name)}`;
-  })();
+  let cvUrl: string | null = null;
+  if (profile?.cv_media_id) {
+    const asset = await getMediaAsset(profile.cv_media_id);
+    if (asset) {
+      cvUrl = assetPublicUrl(asset.storage_name, asset.bucket, asset.visibility);
+    }
+  }
 
   const name = profile?.display_name || 'Winnie Awuor Otieno';
 

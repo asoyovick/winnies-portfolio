@@ -1,8 +1,8 @@
 import { getExpertise } from '@/lib/content';
 import { Reveal } from './Reveal';
 
-export default function Expertise() {
-  const items = getExpertise();
+export default async function Expertise() {
+  const items = await getExpertise();
 
   // Group by category so related expertise sits together under a plain
   // group label (the blueprint's "group separated by a plain word").

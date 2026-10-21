@@ -2,13 +2,24 @@
 
 import { cookies } from 'next/headers';
 import { authenticateRequest } from './auth';
-import { db } from './db';
-import type { AdminUser, ProfileSettings, ExperienceEntry, EducationEntry, ExpertiseEntry, Article, MediaAsset, ContactInquiry } from './db';
+import { get, query } from './db';
+import type {
+  AdminUser,
+  ProfileSettings,
+  ExperienceEntry,
+  EducationEntry,
+  ExpertiseEntry,
+  Article,
+  MediaAsset,
+  ContactInquiry,
+} from './db';
 
-export async function getServerAdmin(): Promise<{ admin: AdminUser } | { redirect: string }> {
+export async function getServerAdmin(): Promise<
+  { admin: AdminUser } | { redirect: string }
+> {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const result = authenticateRequest(sessionToken);
+  const result = await authenticateRequest(sessionToken);
   if (!result.ok) {
     return { redirect: '/admin/login' };
   }
@@ -16,31 +27,36 @@ export async function getServerAdmin(): Promise<{ admin: AdminUser } | { redirec
 }
 
 export async function getServerProfile(): Promise<ProfileSettings | null> {
-  const row = db.prepare('SELECT * FROM profile_settings WHERE id = 1').get();
-  if (!row) return null;
-  return row as ProfileSettings;
+  const row = await get<ProfileSettings>(
+    'SELECT * FROM profile_settings WHERE id = 1'
+  );
+  return row ?? null;
 }
 
 export async function getServerExperience(): Promise<ExperienceEntry[]> {
-  return db.prepare('SELECT * FROM experience ORDER BY display_order ASC, start_date DESC').all() as ExperienceEntry[];
+  return query<ExperienceEntry>(
+    'SELECT * FROM experience ORDER BY display_order ASC, start_date DESC'
+  );
 }
 
 export async function getServerEducation(): Promise<EducationEntry[]> {
-  return db.prepare('SELECT * FROM education ORDER BY display_order ASC').all() as EducationEntry[];
+  return query<EducationEntry>('SELECT * FROM education ORDER BY display_order ASC');
 }
 
 export async function getServerExpertise(): Promise<ExpertiseEntry[]> {
-  return db.prepare('SELECT * FROM expertise ORDER BY display_order ASC').all() as ExpertiseEntry[];
+  return query<ExpertiseEntry>('SELECT * FROM expertise ORDER BY display_order ASC');
 }
 
 export async function getServerArticles(): Promise<Article[]> {
-  return db.prepare('SELECT * FROM articles ORDER BY updated_at DESC').all() as Article[];
+  return query<Article>('SELECT * FROM articles ORDER BY updated_at DESC');
 }
 
 export async function getServerMedia(): Promise<MediaAsset[]> {
-  return db.prepare('SELECT * FROM media ORDER BY created_at DESC').all() as MediaAsset[];
+  return query<MediaAsset>('SELECT * FROM media ORDER BY created_at DESC');
 }
 
 export async function getServerInquiries(): Promise<ContactInquiry[]> {
-  return db.prepare('SELECT * FROM contact_inquiries ORDER BY created_at DESC').all() as ContactInquiry[];
+  return query<ContactInquiry>(
+    'SELECT * FROM contact_inquiries ORDER BY created_at DESC'
+  );
 }

@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getArticleBySlug } from '@/lib/content';
+import { formatDate, getArticleBySlug } from '@/lib/content';
 import { sanitizeHtml } from '@/lib/sanitize';
 
 type Params = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  const article = getArticleBySlug(slug);
+  const article = await getArticleBySlug(slug);
   if (!article) {
     return { title: 'Insight not found' };
   }
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function ArticlePage({ params }: Params) {
   const { slug } = await params;
-  const article = getArticleBySlug(slug);
+  const article = await getArticleBySlug(slug);
 
   // A draft is not published, so it is not found — the URL gives nothing away.
   if (!article) {
@@ -33,10 +33,7 @@ export default async function ArticlePage({ params }: Params) {
   }
 
   const published = article.published_at
-    ? new Date(article.published_at).toLocaleDateString('en-GB', {
-        year: 'numeric',
-        month: 'long',
-      })
+    ? formatDate(article.published_at)
     : null;
 
   return (

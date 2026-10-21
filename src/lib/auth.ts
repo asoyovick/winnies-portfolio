@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { db } from './db';
+import { get, run } from './db';
 import type { AdminUser, SessionRow } from './db';
 
 const SESSION_SECRET = process.env.SESSION_SECRET || '';
@@ -50,62 +50,69 @@ export function expiresIn(seconds: number): string {
   return new Date(Date.now() + seconds * 1000).toISOString();
 }
 
-export function createSession(adminId: number): { token: string; row: SessionRow } {
+export async function createSession(
+  adminId: number
+): Promise<{ token: string; row: SessionRow }> {
   const token = generateToken();
   const tokenHash = hashToken(token);
   const expiresAt = expiresIn(SESSION_MAX_AGE);
-  const row = db
-    .prepare(
-      `INSERT INTO sessions (admin_id, token_hash, expires_at)
-       VALUES (?, ?, ?)
-       RETURNING id, admin_id, token_hash, expires_at, created_at`
-    )
-    .get(adminId, tokenHash, expiresAt) as SessionRow;
+  const row = await get<SessionRow>(
+    `INSERT INTO sessions (admin_id, token_hash, expires_at)
+     VALUES ($1, $2, $3)
+     RETURNING id, admin_id, token_hash, expires_at, created_at`,
+    [adminId, tokenHash, expiresAt]
+  );
+  if (!row) throw new Error('The session could not be created.');
   return { token, row };
 }
 
-export function getSessionByToken(token: string): SessionRow | null {
+export async function getSessionByToken(token: string): Promise<SessionRow | null> {
   const tokenHash = hashToken(token);
-  const row = db
-    .prepare(
-      `SELECT id, admin_id, token_hash, expires_at, created_at
-       FROM sessions WHERE token_hash = ?`
-    )
-    .get(tokenHash) as SessionRow | undefined;
+  const row = await get<SessionRow>(
+    `SELECT id, admin_id, token_hash, expires_at, created_at
+     FROM sessions WHERE token_hash = $1`,
+    [tokenHash]
+  );
   if (!row) return null;
   if (new Date(row.expires_at) <= new Date()) {
-    db.prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
+    await run('DELETE FROM sessions WHERE id = $1', [row.id]);
     return null;
   }
   return row;
 }
 
-export function deleteSession(token: string): void {
+export async function deleteSession(token: string): Promise<void> {
   const tokenHash = hashToken(token);
-  db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
+  await run('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]);
 }
 
-export function deleteExpiredSessions(): void {
-  db.prepare('DELETE FROM sessions WHERE expires_at <= datetime(\'now\')').run();
+export async function deleteExpiredSessions(): Promise<void> {
+  await run('DELETE FROM sessions WHERE expires_at <= now()');
 }
 
-export function getAdminById(id: number): AdminUser | null {
-  const row = db
-    .prepare('SELECT id, email, password_hash, created_at, updated_at FROM admins WHERE id = ?')
-    .get(id) as AdminUser | undefined;
+export async function getAdminById(id: number): Promise<AdminUser | null> {
+  const row = await get<AdminUser>(
+    `SELECT id, email, password_hash, password_ciphertext, password_updated_at,
+            created_at, updated_at
+     FROM admins WHERE id = $1`,
+    [id]
+  );
   return row ?? null;
 }
 
-export function getAdminByEmail(email: string): AdminUser | null {
-  const row = db
-    .prepare('SELECT id, email, password_hash, created_at, updated_at FROM admins WHERE email = ?')
-    .get(email) as AdminUser | undefined;
+export async function getAdminByEmail(email: string): Promise<AdminUser | null> {
+  const row = await get<AdminUser>(
+    `SELECT id, email, password_hash, password_ciphertext, password_updated_at,
+            created_at, updated_at
+     FROM admins WHERE email = $1`,
+    [email]
+  );
   return row ?? null;
 }
 
-export function adminCount(): number {
-  const row = db.prepare('SELECT COUNT(*) AS n FROM admins').get() as { n: number };
-  return row.n;
+export async function adminCount(): Promise<number> {
+  const row = await get<{ n: number }>('SELECT COUNT(*)::int AS n FROM admins');
+  return row?.n ?? 0;
 }
 
 export function cookieOptions(production: boolean) {
@@ -132,34 +139,34 @@ export type AuthResult =
   | { ok: true; admin: AdminUser }
   | { ok: false; reason: 'missing' | 'invalid' | 'expired' | 'unconfigured' };
 
-export function authenticateRequest(
+export async function authenticateRequest(
   sessionToken: string | null
-): AuthResult {
+): Promise<AuthResult> {
   if (!isConfigured()) {
     return { ok: false, reason: 'unconfigured' };
   }
   if (!sessionToken) {
     return { ok: false, reason: 'missing' };
   }
-  const session = getSessionByToken(sessionToken);
+  const session = await getSessionByToken(sessionToken);
   if (!session) {
     return { ok: false, reason: 'invalid' };
   }
-  const admin = getAdminById(session.admin_id);
+  const admin = await getAdminById(session.admin_id);
   if (!admin) {
-    deleteSession(sessionToken);
+    await deleteSession(sessionToken);
     return { ok: false, reason: 'invalid' };
   }
   return { ok: true, admin };
 }
 
-export function requireAdmin(
+export async function requireAdmin(
   sessionToken: string | null
-): { admin: AdminUser } | { error: string; status: number } {
+): Promise<{ admin: AdminUser } | { error: string; status: number }> {
   if (!isConfigured()) {
     return { error: 'Authentication is not configured on the server.', status: 500 };
   }
-  const result = authenticateRequest(sessionToken);
+  const result = await authenticateRequest(sessionToken);
   if (!result.ok) {
     return { error: 'Not authenticated.', status: 401 };
   }

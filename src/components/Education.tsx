@@ -8,8 +8,8 @@ function year(value: string | null): string {
   return String(parsed.getFullYear());
 }
 
-export default function Education() {
-  const items = getEducation();
+export default async function Education() {
+  const items = await getEducation();
 
   return (
     <section id="education" className="section" aria-labelledby="education-heading">

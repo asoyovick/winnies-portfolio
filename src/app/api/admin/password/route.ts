@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import {
   comparePassword,
   getSessionByToken,
@@ -7,8 +6,9 @@ import {
   requireAdmin,
   validateCsrfToken,
 } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { get, run } from '@/lib/db';
 import { isStrongEnough, openCredential, sealCredential } from '@/lib/credential-vault';
+import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +23,7 @@ export const runtime = 'nodejs';
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -62,9 +62,10 @@ export async function POST(request: Request) {
   }
 
   if (body.action === 'reveal') {
-    const row = db
-      .prepare('SELECT password_ciphertext FROM admins WHERE id = ?')
-      .get(admin.admin.id) as { password_ciphertext: string } | undefined;
+    const row = await get<{ password_ciphertext: string }>(
+      'SELECT password_ciphertext FROM admins WHERE id = $1',
+      [admin.admin.id]
+    );
     const password = openCredential(row?.password_ciphertext ?? '');
     if (!password) {
       return NextResponse.json(
@@ -100,18 +101,20 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await hashPassword(newPassword);
-  const now = new Date().toISOString();
-  db.prepare(
-    'UPDATE admins SET password_hash = ?, password_ciphertext = ?, password_updated_at = ? WHERE id = ?'
-  ).run(passwordHash, sealCredential(newPassword), now, admin.admin.id);
+  await run(
+    `UPDATE admins
+     SET password_hash = $1, password_ciphertext = $2, password_updated_at = now(), updated_at = now()
+     WHERE id = $3`,
+    [passwordHash, sealCredential(newPassword), admin.admin.id]
+  );
 
   // Sign out every other session; the one in use stays signed in.
-  const current = sessionToken ? getSessionByToken(sessionToken) : null;
+  const current = sessionToken ? await getSessionByToken(sessionToken) : null;
   if (current) {
-    db.prepare('DELETE FROM sessions WHERE admin_id = ? AND id != ?').run(
+    await run('DELETE FROM sessions WHERE admin_id = $1 AND id != $2', [
       admin.admin.id,
-      current.id
-    );
+      current.id,
+    ]);
   }
 
   return NextResponse.json({

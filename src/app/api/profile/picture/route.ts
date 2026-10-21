@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { requireAdmin, validateCsrfToken } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { get, run } from '@/lib/db';
 import {
   ASSET_FOLDERS,
   MAX_PROFILE_IMAGE_SIZE,
   assetPublicUrl,
+  changeAssetVisibility,
   deleteFile,
   storeFile,
   validateProfileImageBuffer,
@@ -16,7 +17,7 @@ export const runtime = 'nodejs';
 /**
  * Winnie's profile picture.
  *
- * The image file is written to the storage directory (or the object store);
+ * The image file is written to the storage directory (or to Supabase Storage);
  * the database only ever holds the asset's metadata and the reference to it
  * in the profile. The old file is removed once the profile points at the new
  * one, and only when nothing else refers to it.
@@ -25,7 +26,7 @@ export const runtime = 'nodejs';
 async function authenticate(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return { error: NextResponse.json({ error: admin.error }, { status: admin.status }) };
   }
@@ -40,16 +41,17 @@ async function authenticate(request: Request) {
 }
 
 /** Is this asset still referenced by the profile or by an article? */
-function assetIsReferenced(assetId: number): boolean {
-  const profile = db
-    .prepare('SELECT profile_image_id, cv_media_id FROM profile_settings WHERE id = 1')
-    .get() as { profile_image_id: number | null; cv_media_id: number | null } | undefined;
+async function assetIsReferenced(assetId: number): Promise<boolean> {
+  const profile = await get<any>(
+    'SELECT profile_image_id, cv_media_id FROM profile_settings WHERE id = 1'
+  );
   if (profile?.profile_image_id === assetId || profile?.cv_media_id === assetId) {
     return true;
   }
-  const article = db
-    .prepare('SELECT id FROM articles WHERE featured_image_id = ?')
-    .get(assetId);
+  const article = await get<any>(
+    'SELECT id FROM articles WHERE featured_image_id = $1',
+    [assetId]
+  );
   return Boolean(article);
 }
 
@@ -90,6 +92,8 @@ export async function POST(request: Request) {
       buffer,
       originalName: file.name,
       folder: ASSET_FOLDERS.profile,
+      // The profile picture is shown on the public site.
+      visibility: 'public',
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -98,40 +102,43 @@ export async function POST(request: Request) {
     );
   }
 
-  const now = new Date().toISOString();
-  const previous = db
-    .prepare('SELECT profile_image_id FROM profile_settings WHERE id = 1')
-    .get() as { profile_image_id: number | null } | undefined;
+  const previous = await get<any>(
+    'SELECT profile_image_id FROM profile_settings WHERE id = 1'
+  );
   const previousId = previous?.profile_image_id ?? null;
 
   let assetId: number;
   try {
-    const result = db
-      .prepare(
-        `INSERT INTO media (original_name, storage_name, mime_type, size, path, width, height, uploaded_by_admin_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
+    const row = await get<any>(
+      `INSERT INTO media (
+         original_name, storage_name, mime_type, size, path, bucket, visibility,
+         width, height, uploaded_by_admin_id, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+       RETURNING *`,
+      [
         stored.originalName,
         stored.storageName,
         stored.mimeType,
         stored.size,
         stored.path,
+        stored.bucket,
+        stored.visibility,
         stored.width,
         stored.height,
         auth.admin.admin.id,
-        now
-      );
-    assetId = Number(result.lastInsertRowid);
+      ]
+    );
+    assetId = Number(row.id);
 
-    db.prepare(
-      'UPDATE profile_settings SET profile_image_id = ?, updated_at = ? WHERE id = 1'
-    ).run(assetId, now);
+    await run(
+      'UPDATE profile_settings SET profile_image_id = $1, updated_at = now() WHERE id = 1',
+      [assetId]
+    );
   } catch {
     // The file is stored but the profile could not be updated: remove the
     // orphaned file rather than leaving it behind.
     try {
-      await deleteFile(stored.storageName);
+      await deleteFile(stored.storageName, stored.bucket);
     } catch {
       // Nothing more we can do; the file is harmless on its own.
     }
@@ -143,21 +150,19 @@ export async function POST(request: Request) {
 
   // The old picture is removed only now that the profile points at the new
   // one, and only if nothing else still refers to it.
-  if (previousId && previousId !== assetId && !assetIsReferenced(previousId)) {
-    const old = db.prepare('SELECT storage_name FROM media WHERE id = ?').get(previousId) as
-      | { storage_name: string }
-      | undefined;
+  if (previousId && previousId !== assetId && !(await assetIsReferenced(previousId))) {
+    const old = await get<any>('SELECT * FROM media WHERE id = $1', [previousId]);
     if (old) {
       try {
-        await deleteFile(old.storage_name);
+        await deleteFile(old.storage_name, old.bucket);
       } catch {
         // The file stays on disk if it cannot be removed; the site still works.
       }
-      db.prepare('DELETE FROM media WHERE id = ?').run(previousId);
+      await run('DELETE FROM media WHERE id = $1', [previousId]);
     }
   }
 
-  const profile = db.prepare('SELECT * FROM profile_settings WHERE id = 1').get();
+  const profile = await get<any>('SELECT * FROM profile_settings WHERE id = 1');
 
   return NextResponse.json({
     ok: true,
@@ -166,8 +171,8 @@ export async function POST(request: Request) {
       original_name: stored.originalName,
       mime_type: stored.mimeType,
       size: stored.size,
-      public_url: assetPublicUrl(stored.storageName),
-      created_at: now,
+      public_url: assetPublicUrl(stored.storageName, stored.bucket, stored.visibility),
+      created_at: new Date().toISOString(),
     },
     profile,
   });
@@ -177,35 +182,52 @@ export async function DELETE(request: Request) {
   const auth = await authenticate(request);
   if ('error' in auth) return auth.error;
 
-  const profile = db
-    .prepare('SELECT profile_image_id FROM profile_settings WHERE id = 1')
-    .get() as { profile_image_id: number | null } | undefined;
+  const profile = await get<any>(
+    'SELECT profile_image_id FROM profile_settings WHERE id = 1'
+  );
   const assetId = profile?.profile_image_id ?? null;
 
   if (!assetId) {
-    return NextResponse.json({ ok: true, profile });
+    return NextResponse.json({
+      ok: true,
+      profile: await get<any>('SELECT * FROM profile_settings WHERE id = 1'),
+    });
   }
 
-  const now = new Date().toISOString();
-  db.prepare('UPDATE profile_settings SET profile_image_id = NULL, updated_at = ? WHERE id = 1').run(now);
+  await run(
+    'UPDATE profile_settings SET profile_image_id = NULL, updated_at = now() WHERE id = 1'
+  );
 
   // Only delete the file when nothing else still points at it.
-  if (!assetIsReferenced(assetId)) {
-    const asset = db.prepare('SELECT storage_name FROM media WHERE id = ?').get(assetId) as
-      | { storage_name: string }
-      | undefined;
+  if (!(await assetIsReferenced(assetId))) {
+    const asset = await get<any>('SELECT * FROM media WHERE id = $1', [assetId]);
     if (asset) {
       try {
-        await deleteFile(asset.storage_name);
+        await deleteFile(asset.storage_name, asset.bucket);
       } catch {
-        // The record is still removed; the file simply stays on disk.
+        // The record is still removed; the file simply stays in storage.
       }
-      db.prepare('DELETE FROM media WHERE id = ?').run(assetId);
+      await run('DELETE FROM media WHERE id = $1', [assetId]);
     }
   }
 
   return NextResponse.json({
     ok: true,
-    profile: db.prepare('SELECT * FROM profile_settings WHERE id = 1').get(),
+    profile: await get<any>('SELECT * FROM profile_settings WHERE id = 1'),
   });
+}
+
+/** Used when an existing asset is chosen as the profile picture. */
+export async function publishProfilePicture(assetId: number): Promise<void> {
+  const asset = await get<any>('SELECT * FROM media WHERE id = $1', [assetId]);
+  if (!asset || asset.visibility === 'public') return;
+  const moved = await changeAssetVisibility({
+    storageName: asset.storage_name,
+    bucket: asset.bucket,
+    visibility: 'public',
+  });
+  await run(
+    'UPDATE media SET bucket = $1, storage_name = $2, updated_at = now() WHERE id = $3',
+    [moved.bucket, moved.storageName, assetId]
+  );
 }

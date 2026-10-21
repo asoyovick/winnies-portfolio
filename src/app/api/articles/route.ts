@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { validateCsrfToken, requireAdmin } from '@/lib/auth';
-import { authenticateRequest } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { validateCsrfToken, requireAdmin, authenticateRequest } from '@/lib/auth';
+import { get, query, run } from '@/lib/db';
 import { slugify } from '@/lib/validation';
 
 export const runtime = 'nodejs';
@@ -22,19 +21,20 @@ function articleResponse(row: any) {
   };
 }
 
-function isAdminRequest(request: Request): boolean {
-  const sessionToken = request.headers.get('cookie')?.match(/portfolio_session=([^;]+)/)?.[1] ?? null;
-  const result = authenticateRequest(sessionToken);
+async function isAdminRequest(request: Request): Promise<boolean> {
+  const sessionToken =
+    request.headers.get('cookie')?.match(/portfolio_session=([^;]+)/)?.[1] ?? null;
+  const result = await authenticateRequest(sessionToken);
   return result.ok;
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const admin = isAdminRequest(request);
+  const admin = await isAdminRequest(request);
   const slug = searchParams.get('slug');
 
   if (slug) {
-    const row = db.prepare('SELECT * FROM articles WHERE slug = ?').get(slug) as any | undefined;
+    const row = await get<any>('SELECT * FROM articles WHERE slug = $1', [slug]);
     if (!row) {
       return NextResponse.json({ error: 'Article not found.' }, { status: 404 });
     }
@@ -44,16 +44,19 @@ export async function GET(request: Request) {
     return NextResponse.json(articleResponse(row));
   }
 
-  const rows = db
-    .prepare(admin ? 'SELECT * FROM articles ORDER BY updated_at DESC' : 'SELECT * FROM articles WHERE status = ? ORDER BY published_at DESC, updated_at DESC')
-    .all(admin ? [] : ['published']) as any[];
+  const rows = admin
+    ? await query<any>('SELECT * FROM articles ORDER BY updated_at DESC')
+    : await query<any>(
+        `SELECT * FROM articles WHERE status = 'published'
+         ORDER BY published_at DESC, updated_at DESC`
+      );
   return NextResponse.json(rows.map(articleResponse));
 }
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -78,37 +81,40 @@ export async function POST(request: Request) {
   if (!slug) slug = `article-${Date.now()}`;
   let uniqueSlug = slug;
   let counter = 1;
-  while (db.prepare('SELECT id FROM articles WHERE slug = ?').get(uniqueSlug)) {
+  while ((await get<any>('SELECT id FROM articles WHERE slug = $1', [uniqueSlug]))) {
     uniqueSlug = `${slug}-${counter++}`;
   }
 
-  const now = new Date().toISOString();
-  const status: 'draft' | 'published' = body.status === 'published' ? 'published' : 'draft';
-  const publishedAt = status === 'published' && !body.published_at ? now : body.published_at || null;
+  const status: 'draft' | 'published' =
+    body.status === 'published' ? 'published' : 'draft';
+  const publishedAt =
+    status === 'published' && !body.published_at ? new Date().toISOString() : body.published_at || null;
 
-  const result = db.prepare(
-    `INSERT INTO articles (title, slug, summary, body, featured_image_id, status, published_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    body.title,
-    uniqueSlug,
-    body.summary ?? '',
-    body.body ?? '',
-    body.featured_image_id === null || body.featured_image_id === undefined ? null : Number(body.featured_image_id),
-    status,
-    publishedAt,
-    now,
-    now
+  const row = await get<any>(
+    `INSERT INTO articles (
+       title, slug, summary, body, featured_image_id, status, published_at,
+       created_at, updated_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
+     RETURNING *`,
+    [
+      body.title,
+      uniqueSlug,
+      body.summary ?? '',
+      body.body ?? '',
+      body.featured_image_id === null || body.featured_image_id === undefined
+        ? null
+        : Number(body.featured_image_id),
+      status,
+      publishedAt,
+    ]
   );
-
-  const row = db.prepare('SELECT * FROM articles WHERE id = ?').get(result.lastInsertRowid);
   return NextResponse.json(articleResponse(row), { status: 201 });
 }
 
 export async function PUT(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -130,9 +136,9 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Article id is required.' }, { status: 400 });
   }
 
-  const now = new Date().toISOString();
   const fields: string[] = [];
   const values: unknown[] = [];
+  let index = 1;
 
   const allowed: Record<string, unknown> = {};
   if (typeof body.title === 'string') allowed.title = body.title.trim();
@@ -140,14 +146,16 @@ export async function PUT(request: Request) {
   if (typeof body.body === 'string') allowed.body = body.body;
   if (typeof body.slug === 'string') allowed.slug = body.slug.trim();
   if (typeof body.featured_image_id !== 'undefined') {
-    allowed.featured_image_id = body.featured_image_id === null ? null : Number(body.featured_image_id);
+    allowed.featured_image_id =
+      body.featured_image_id === null ? null : Number(body.featured_image_id);
   }
   if (typeof body.status === 'string') allowed.status = body.status;
-  if (typeof body.published_at !== 'undefined') allowed.published_at = body.published_at === null ? null : body.published_at;
-  if (typeof body.display_order === 'number') allowed.display_order = body.display_order;
+  if (typeof body.published_at !== 'undefined') {
+    allowed.published_at = body.published_at === null ? null : body.published_at;
+  }
 
   for (const [key, value] of Object.entries(allowed)) {
-    fields.push(`${key} = ?`);
+    fields.push(`${key} = $${index++}`);
     values.push(value);
   }
 
@@ -156,16 +164,22 @@ export async function PUT(request: Request) {
   }
 
   if (allowed.status === 'published' && !allowed.published_at) {
-    const existing = db.prepare('SELECT published_at FROM articles WHERE id = ?').get(id) as any;
-    fields.push('published_at = ?');
-    values.push((existing && existing.published_at) ? existing.published_at : now);
+    const existing = await get<any>(
+      'SELECT published_at FROM articles WHERE id = $1',
+      [id]
+    );
+    fields.push(`published_at = $${index++}`);
+    values.push(
+      existing && existing.published_at ? existing.published_at : new Date().toISOString()
+    );
   }
 
-  fields.push('updated_at = ?');
-  values.push(now, id);
+  fields.push('updated_at = now()');
+  values.push(id);
 
-  db.prepare(`UPDATE articles SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  const row = db.prepare('SELECT * FROM articles WHERE id = ?').get(id);
+  await run(`UPDATE articles SET ${fields.join(', ')} WHERE id = $${index}`, values);
+
+  const row = await get<any>('SELECT * FROM articles WHERE id = $1', [id]);
   if (!row) {
     return NextResponse.json({ error: 'Article not found.' }, { status: 404 });
   }
@@ -175,7 +189,7 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -191,9 +205,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Article id is required.' }, { status: 400 });
   }
 
-  const row = db.prepare('SELECT id FROM articles WHERE id = ?').get(id);
+  const row = await get<any>('SELECT id FROM articles WHERE id = $1', [id]);
   if (!row) {
-    return NextResponse.json({ error: 'Article not found.' }, { status: 404 });
+    return NextResponse.json({ error: 'Article id is required.' }, { status: 400 });
   }
 
   const confirm = searchParams.get('confirm');
@@ -204,6 +218,6 @@ export async function DELETE(request: Request) {
     );
   }
 
-  db.prepare('DELETE FROM articles WHERE id = ?').run(id);
+  await run('DELETE FROM articles WHERE id = $1', [id]);
   return NextResponse.json({ ok: true });
 }

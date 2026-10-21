@@ -10,8 +10,8 @@ import { Reveal } from './Reveal';
  * never Winnie's own premises. Credits sit under each picture and in the
  * footer.
  */
-export default function Place() {
-  const profile = getProfile();
+export default async function Place() {
+  const profile = await getProfile();
 
   return (
     <section id="place" className="section" aria-labelledby="place-heading">

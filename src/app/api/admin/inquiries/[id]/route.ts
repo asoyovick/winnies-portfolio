@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { requireAdmin } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { get, run } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -11,16 +11,14 @@ export async function GET(
 ) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
 
   const { id } = await params;
   const numericId = Number(id);
-  const row = db
-    .prepare('SELECT * FROM contact_inquiries WHERE id = ?')
-    .get(numericId) as any | undefined;
+  const row = await get<any>('SELECT * FROM contact_inquiries WHERE id = $1', [numericId]);
   if (!row) {
     return NextResponse.json({ error: 'Inquiry not found.' }, { status: 404 });
   }
@@ -33,14 +31,14 @@ export async function PATCH(
 ) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
 
   const { id } = await params;
   const numericId = Number(id);
-  const row = db.prepare('SELECT id FROM contact_inquiries WHERE id = ?').get(numericId);
+  const row = await get<any>('SELECT id FROM contact_inquiries WHERE id = $1', [numericId]);
   if (!row) {
     return NextResponse.json({ error: 'Inquiry not found.' }, { status: 404 });
   }
@@ -52,17 +50,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const fields: string[] = [];
-  const values: unknown[] = [];
-  if (typeof body.is_read === 'boolean') {
-    fields.push('is_read = ?');
-    values.push(body.is_read ? 1 : 0);
-  }
-  if (fields.length === 0) {
+  if (typeof body.is_read !== 'boolean') {
     return NextResponse.json({ error: 'No updatable fields.' }, { status: 400 });
   }
-  values.push(numericId);
-  db.prepare(`UPDATE contact_inquiries SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+  await run('UPDATE contact_inquiries SET is_read = $1 WHERE id = $2', [
+    body.is_read,
+    numericId,
+  ]);
   return NextResponse.json({ ok: true });
 }
 
@@ -72,14 +67,14 @@ export async function DELETE(
 ) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
 
   const { id } = await params;
   const numericId = Number(id);
-  const row = db.prepare('SELECT id FROM contact_inquiries WHERE id = ?').get(numericId);
+  const row = await get<any>('SELECT id FROM contact_inquiries WHERE id = $1', [numericId]);
   if (!row) {
     return NextResponse.json({ error: 'Inquiry not found.' }, { status: 404 });
   }
@@ -92,6 +87,6 @@ export async function DELETE(
     );
   }
 
-  db.prepare('DELETE FROM contact_inquiries WHERE id = ?').run(id);
+  await run('DELETE FROM contact_inquiries WHERE id = $1', [numericId]);
   return NextResponse.json({ ok: true });
 }

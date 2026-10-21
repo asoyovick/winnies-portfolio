@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, rateLimitKey } from '@/lib/rate-limit';
 import { validateContactForm } from '@/lib/validation';
-import { db } from '@/lib/db';
+import { run } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +9,7 @@ const INQUIRY_LIMIT = { limit: 10, windowMs: 60 * 60 * 1000 }; // 10 per hour pe
 
 export async function POST(request: Request) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined;
-  const rl = rateLimit(rateLimitKey(ip, 'contact'), INQUIRY_LIMIT);
+  const rl = await rateLimit(rateLimitKey(ip, 'contact'), INQUIRY_LIMIT);
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Too many messages. Try again later.' }, { status: 429 });
   }
@@ -26,16 +26,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Please correct the form.', errors }, { status: 400 });
   }
 
-  const now = new Date().toISOString();
-  db.prepare(
+  await run(
     `INSERT INTO contact_inquiries (name, email, subject, message, is_read, created_at)
-     VALUES (?, ?, ?, ?, 0, ?)`
-  ).run(
-    String(body.name).trim(),
-    String(body.email).trim(),
-    String(body.subject ?? '').trim(),
-    String(body.message).trim(),
-    now
+     VALUES ($1, $2, $3, $4, false, now())`,
+    [
+      String(body.name).trim(),
+      String(body.email).trim(),
+      String(body.subject ?? '').trim(),
+      String(body.message).trim(),
+    ]
   );
 
   // Optional email notification when SMTP is configured.

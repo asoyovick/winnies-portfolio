@@ -44,8 +44,8 @@ const PILLARS = [
  * The picture is Winnie's own photograph when she has uploaded one, and a
  * photograph of Kisumu — the town her practice is based in — until then.
  */
-export default function Hero() {
-  const profile = getProfile();
+export default async function Hero() {
+  const profile = await getProfile();
 
   const heading = (
     profile?.hero_heading || 'Clear thinking.\nConfident decisions.'
@@ -60,13 +60,13 @@ export default function Hero() {
     'I work across tax compliance, financial audits and accounting so businesses meet their obligations and understand their finances.'
   ).trim();
 
-  const currentRole = getExperience().find((item) => Boolean(item.is_current));
+  const currentRole = (await getExperience()).find((item) => Boolean(item.is_current));
 
   // Winnie's own photograph if there is one; otherwise the town she works in.
   let backgroundSrc = '/images/kisumu-city.jpg';
   let backgroundAlt = '';
   if (profile?.profile_image_id) {
-    const asset = getMediaAsset(profile.profile_image_id);
+    const asset = await getMediaAsset(profile.profile_image_id);
     if (asset) {
       backgroundSrc = `/api/media/${encodeURIComponent(asset.storage_name)}`;
       backgroundAlt = '';

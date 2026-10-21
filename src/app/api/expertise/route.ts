@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { validateCsrfToken, requireAdmin } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { get, query, run } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -19,16 +19,16 @@ function entryResponse(row: any) {
 }
 
 export async function GET() {
-  const rows = db
-    .prepare('SELECT * FROM expertise ORDER BY display_order ASC, created_at DESC')
-    .all() as any[];
+  const rows = await query<any>(
+    'SELECT * FROM expertise ORDER BY display_order ASC, created_at DESC'
+  );
   return NextResponse.json(rows.map(entryResponse));
 }
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -49,28 +49,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Title is required.' }, { status: 400 });
   }
 
-  const now = new Date().toISOString();
-  const result = db.prepare(
-    `INSERT INTO expertise (title, description, category, display_order, is_featured, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    body.title,
-    body.description ?? '',
-    body.category ?? '',
-    Number(body.display_order ?? 0),
-    body.is_featured ? 1 : 0,
-    now,
-    now
+  const row = await get<any>(
+    `INSERT INTO expertise (
+       title, description, category, display_order, is_featured,
+       created_at, updated_at
+     ) VALUES ($1, $2, $3, $4, $5, now(), now())
+     RETURNING *`,
+    [
+      body.title,
+      body.description ?? '',
+      body.category ?? '',
+      Number(body.display_order ?? 0),
+      Boolean(body.is_featured),
+    ]
   );
-
-  const row = db.prepare('SELECT * FROM expertise WHERE id = ?').get(result.lastInsertRowid);
   return NextResponse.json(entryResponse(row), { status: 201 });
 }
 
 export async function PUT(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -92,19 +91,19 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Entry id is required.' }, { status: 400 });
   }
 
-  const now = new Date().toISOString();
   const fields: string[] = [];
   const values: unknown[] = [];
+  let index = 1;
 
   const allowed: Record<string, unknown> = {};
   if (typeof body.title === 'string') allowed.title = body.title.trim();
   if (typeof body.description === 'string') allowed.description = body.description;
   if (typeof body.category === 'string') allowed.category = body.category.trim();
   if (typeof body.display_order === 'number') allowed.display_order = body.display_order;
-  if (typeof body.is_featured === 'boolean') allowed.is_featured = body.is_featured ? 1 : 0;
+  if (typeof body.is_featured === 'boolean') allowed.is_featured = body.is_featured;
 
   for (const [key, value] of Object.entries(allowed)) {
-    fields.push(`${key} = ?`);
+    fields.push(`${key} = $${index++}`);
     values.push(value);
   }
 
@@ -112,11 +111,15 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'No updatable fields provided.' }, { status: 400 });
   }
 
-  fields.push('updated_at = ?');
-  values.push(now, id);
+  fields.push('updated_at = now()');
+  values.push(id);
 
-  db.prepare(`UPDATE expertise SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  const row = db.prepare('SELECT * FROM expertise WHERE id = ?').get(id);
+  await run(
+    `UPDATE expertise SET ${fields.join(', ')} WHERE id = $${index}`,
+    values
+  );
+
+  const row = await get<any>('SELECT * FROM expertise WHERE id = $1', [id]);
   if (!row) {
     return NextResponse.json({ error: 'Entry not found.' }, { status: 404 });
   }
@@ -126,7 +129,7 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -142,9 +145,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Entry id is required.' }, { status: 400 });
   }
 
-  const row = db.prepare('SELECT id FROM expertise WHERE id = ?').get(id);
+  const row = await get<any>('SELECT id FROM expertise WHERE id = $1', [id]);
   if (!row) {
-    return NextResponse.json({ error: 'Entry not found.' }, { status: 404 });
+    return NextResponse.json({ error: 'Entry not found.' }, { status: 400 });
   }
 
   const confirm = searchParams.get('confirm');
@@ -155,6 +158,6 @@ export async function DELETE(request: Request) {
     );
   }
 
-  db.prepare('DELETE FROM expertise WHERE id = ?').run(id);
+  await run('DELETE FROM expertise WHERE id = $1', [id]);
   return NextResponse.json({ ok: true });
 }

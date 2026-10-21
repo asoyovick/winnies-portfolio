@@ -14,9 +14,9 @@ export async function POST() {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
 
-  const result = authenticateRequest(sessionToken);
+  const result = await authenticateRequest(sessionToken);
   if (result.ok && sessionToken) {
-    deleteSession(sessionToken);
+    await deleteSession(sessionToken);
   }
 
   const response = NextResponse.json({ ok: true });

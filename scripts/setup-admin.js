@@ -2,31 +2,23 @@
  * Creates the first administrator account, or resets the password of an
  * existing one.
  *
- * This is a protected initialization run directly on the server. It must NOT
- * create a default account with known credentials in production.
+ *   ADMIN_EMAIL=... ADMIN_PASSWORD=... node scripts/setup-admin.js
+ *   RESET_ADMIN=1 ADMIN_EMAIL=... ADMIN_PASSWORD=... node scripts/setup-admin.js
  *
- * Usage (interactive):
- *   node scripts/setup-admin.js
- *
- * Usage (non-interactive, for provisioning):
- *   ADMIN_EMAIL=winnie@example.com ADMIN_PASSWORD=... node scripts/setup-admin.js
- *
- * Resetting an existing account (for example when the password is lost):
- *   RESET_ADMIN=1 ADMIN_EMAIL=winnie@example.com ADMIN_PASSWORD=... node scripts/setup-admin.js
- *
- * The ADMIN_SETUP_TOKEN environment variable is not used here; it guards the
- * HTTP setup endpoint instead.
+ * Run this on the server. It is the only supported way to create the first
+ * administrator: there is no public registration, and no account is ever
+ * seeded with a known password.
  */
-import Database from 'better-sqlite3';
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { createInterface } from 'readline/promises';
 import { createCipheriv, randomBytes, scryptSync } from 'crypto';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = join(__dirname, '..');
-const DB_PATH = process.env.DATABASE_URL || join(PROJECT_ROOT, 'data', 'app.db');
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error('DATABASE_URL is not set. Point it at the PostgreSQL database first.');
+  process.exit(1);
+}
 
 const KEY_SALT = 'winnie-portfolio-credential-vault-v1';
 
@@ -53,80 +45,75 @@ function sealCredential(plainText) {
   ].join(':');
 }
 
-function existingAdminCount(db) {
-  return db.prepare('SELECT COUNT(*) AS n FROM admins').get().n;
-}
-
-async function prompt(question) {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return await rl.question(question);
-  } finally {
-    rl.close();
-  }
-}
-
 async function main() {
-  const db = new Database(DB_PATH);
-  db.pragma('foreign_keys = ON');
-
-  const count = existingAdminCount(db);
+  const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD || '';
   const reset = process.env.RESET_ADMIN === '1';
 
-  if (count > 0 && !reset) {
-    console.log(`${count} administrator account(s) already exist.`);
-    console.log('To reset a password, run again with RESET_ADMIN=1.');
-    db.close();
-    return;
-  }
-
-  const email =
-    process.env.ADMIN_EMAIL || (await prompt('Administrator email: '));
-  const password =
-    process.env.ADMIN_PASSWORD || (await prompt('Administrator password: '));
-
   if (!email || !email.includes('@')) {
-    throw new Error('A valid email address is required.');
+    console.error('ADMIN_EMAIL must be a valid email address.');
+    process.exit(1);
   }
-  if (!password || password.length < 10) {
-    throw new Error('Password must be at least 10 characters.');
+  if (!password || password.length < 12) {
+    console.error('ADMIN_PASSWORD must be at least 12 characters.');
+    process.exit(1);
   }
 
-  const emailLower = email.toLowerCase();
-  const passwordHash = await bcrypt.hash(password, 12);
-  const sealed = sealCredential(password);
-  const now = new Date().toISOString();
+  const client = new pg.Client({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  await client.connect();
 
-  const existing = db.prepare('SELECT id FROM admins WHERE email = ?').get(emailLower);
+  try {
+    const existing = await client.query(
+      'SELECT id FROM admins WHERE email = $1',
+      [email]
+    );
 
-  if (existing) {
-    if (!reset) {
-      throw new Error(`An administrator with email ${emailLower} already exists.`);
+    if (existing.rowCount > 0) {
+      if (!reset) {
+        console.log(`An administrator with the email ${email} already exists.`);
+        console.log('To reset its password, run again with RESET_ADMIN=1.');
+        return;
+      }
+      const passwordHash = await bcrypt.hash(password, 12);
+      await client.query(
+        `UPDATE admins
+         SET password_hash = $1, password_ciphertext = $2, password_updated_at = now(), updated_at = now()
+         WHERE id = $3`,
+        [passwordHash, sealCredential(password), existing.rows[0].id]
+      );
+      // Every session of that administrator is signed out.
+      await client.query('DELETE FROM sessions WHERE admin_id = $1', [existing.rows[0].id]);
+      console.log(`Password reset for ${email}. Every session was signed out.`);
+      return;
     }
-    db.prepare(
-      `UPDATE admins
-       SET password_hash = ?, password_ciphertext = ?, password_updated_at = ?, updated_at = ?
-       WHERE id = ?`
-    ).run(passwordHash, sealed, now, now, existing.id);
-    db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(existing.id);
-    console.log(`Password reset for ${emailLower}. Every session was signed out.`);
-    db.close();
-    return;
+
+    const count = await client.query('SELECT COUNT(*)::int AS n FROM admins');
+    if (count.rows[0].n > 0) {
+      console.log(
+        'An administrator already exists. Use RESET_ADMIN=1 to reset a known account.'
+      );
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    await client.query(
+      `INSERT INTO admins (email, password_hash, password_ciphertext, password_updated_at, created_at, updated_at)
+       VALUES ($1, $2, $3, now(), now(), now())`,
+      [email, passwordHash, sealCredential(password)]
+    );
+    console.log(`Administrator account created for ${email}.`);
+    console.log(
+      'The password is hashed for sign-in and sealed so it can be viewed in the admin panel.'
+    );
+  } finally {
+    await client.end();
   }
-
-  db.prepare(
-    `INSERT INTO admins (email, password_hash, password_ciphertext, password_updated_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(emailLower, passwordHash, sealed, now, now, now);
-
-  console.log(`Administrator account created for ${emailLower}.`);
-  console.log(
-    'The password is hashed for sign-in and sealed so it can be viewed in the admin panel.'
-  );
-  db.close();
 }
 
 main().catch((error) => {
-  console.error(error.message || error);
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

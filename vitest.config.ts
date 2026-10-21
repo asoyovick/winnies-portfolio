@@ -14,9 +14,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts'],
-    hookTimeout: 120000,
+    hookTimeout: 180000,
     testTimeout: 30000,
-    // Isolate tests from the dev database.
+    // One PostgreSQL server for the run; every test file gets a database of
+    // its own.
+    globalSetup: ['./src/test/global-setup.ts'],
     setupFiles: ['./src/test/setup.ts'],
+    // The test files share one database server, so they run one at a time.
+    fileParallelism: false,
   },
 });

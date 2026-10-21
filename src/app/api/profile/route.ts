@@ -1,20 +1,17 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { validateCsrfToken, requireAdmin } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { get, run } from '@/lib/db';
 import { parseJson } from '@/lib/validation';
 import { assetPublicUrl } from '@/lib/storage';
+import { publishAsset } from '@/lib/media';
 
 export const runtime = 'nodejs';
 
-function profileResponse(row: any) {
+async function profileResponse(row: any) {
   const picture = row.profile_image_id
-    ? (db
-        .prepare(
-          'SELECT id, original_name, mime_type, size, storage_name, created_at FROM media WHERE id = ?'
-        )
-        .get(row.profile_image_id) as any | undefined)
-    : undefined;
+    ? await get<any>('SELECT * FROM media WHERE id = $1', [row.profile_image_id])
+    : null;
 
   return {
     id: row.id,
@@ -35,7 +32,11 @@ function profileResponse(row: any) {
           mime_type: picture.mime_type,
           size: picture.size,
           created_at: picture.created_at,
-          public_url: assetPublicUrl(picture.storage_name),
+          public_url: assetPublicUrl(
+            picture.storage_name,
+            picture.bucket,
+            picture.visibility
+          ),
         }
       : null,
     social_links: parseJson(row.social_links, []),
@@ -44,17 +45,17 @@ function profileResponse(row: any) {
 }
 
 export async function GET() {
-  const row = db.prepare('SELECT * FROM profile_settings WHERE id = 1').get();
+  const row = await get<any>('SELECT * FROM profile_settings WHERE id = 1');
   if (!row) {
     return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
   }
-  return NextResponse.json(profileResponse(row));
+  return NextResponse.json(await profileResponse(row));
 }
 
 export async function PUT(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -72,7 +73,6 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const now = new Date().toISOString();
   const fields: string[] = [];
   const values: unknown[] = [];
 
@@ -89,8 +89,9 @@ export async function PUT(request: Request) {
   if (typeof body.profile_image_id !== 'undefined') allowed.profile_image_id = body.profile_image_id === null ? null : Number(body.profile_image_id);
   if (Array.isArray(body.social_links)) allowed.social_links = JSON.stringify(body.social_links);
 
+  let index = 1;
   for (const [key, value] of Object.entries(allowed)) {
-    fields.push(`${key} = ?`);
+    fields.push(`${key} = $${index++}`);
     values.push(value);
   }
 
@@ -98,13 +99,23 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'No updatable fields provided.' }, { status: 400 });
   }
 
-  fields.push('updated_at = ?');
-  values.push(now, 1);
+  fields.push(`updated_at = now()`);
+  values.push(1);
 
-  db.prepare(
-    `UPDATE profile_settings SET ${fields.join(', ')} WHERE id = ?`
-  ).run(...values);
+  await run(
+    `UPDATE profile_settings SET ${fields.join(', ')} WHERE id = $${index}`,
+    values
+  );
 
-  const row = db.prepare('SELECT * FROM profile_settings WHERE id = 1').get();
-  return NextResponse.json(profileResponse(row));
+  // A picture or a CV that is shown on the website has to live in the public
+  // bucket; anything else stays private.
+  if (typeof allowed.profile_image_id === 'number') {
+    await publishAsset(allowed.profile_image_id);
+  }
+  if (typeof allowed.cv_media_id === 'number') {
+    await publishAsset(allowed.cv_media_id);
+  }
+
+  const row = await get<any>('SELECT * FROM profile_settings WHERE id = 1');
+  return NextResponse.json(await profileResponse(row));
 }

@@ -8,12 +8,12 @@ import { NavBar } from './NavBar';
  * picture is read from the profile settings here, on the server, and only the
  * address of the file is handed to the browser.
  */
-export function Nav() {
-  const profile = getProfile();
+export async function Nav() {
+  const profile = await getProfile();
 
   let pictureUrl: string | null = null;
   if (profile?.profile_image_id) {
-    const asset = getMediaAsset(profile.profile_image_id);
+    const asset = await getMediaAsset(profile.profile_image_id);
     if (asset) {
       pictureUrl = `/api/media/${asset.storage_name
         .split('/')

@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { rateLimit, rateLimitKey } from '@/lib/rate-limit';
 import {
+  comparePassword,
   cookieOptions,
   createSession,
   csrfCookieOptions,
   getAdminByEmail,
+  hashToken,
   isConfigured,
   validateCsrfToken,
 } from '@/lib/auth';
-import { comparePassword, hashToken } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
   }
 
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined;
-  const rl = rateLimit(rateLimitKey(ip, 'login'), LOGIN_LIMIT);
+  const rl = await rateLimit(rateLimitKey(ip, 'login'), LOGIN_LIMIT);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many login attempts. Try again later.' },
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
   }
 
-  const admin = getAdminByEmail(email);
+  const admin = await getAdminByEmail(email);
   if (!admin) {
     // Always hash something so timing does not reveal whether the email exists.
     await comparePassword(password, '$2b$12$invalidhashfornonexistinguserxxyyzz');
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
   }
 
-  const { token, row } = createSession(admin.id);
+  const { token, row } = await createSession(admin.id);
   const production = process.env.NODE_ENV === 'production';
 
   const response = NextResponse.json({

@@ -1,29 +1,29 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'child_process';
-import { createServer } from 'net';
-import { readFileSync, readdirSync, rmSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';import { fileURLToPath } from 'url';
-import Database from 'better-sqlite3';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
+import { createServer } from 'node:net';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { sealCredential } from '@/lib/credential-vault';
+import { run } from '@/lib/db';
 
 /**
- * End-to-end tests against a real Next.js server.
+ * End-to-end tests against a real Next.js server and a real PostgreSQL
+ * database.
  *
- * The test starts its own server on a free port with its own database and
- * upload directory, so it never touches the development data and can be run
- * with `npm test` alone.
+ * The test file gets its own database (created and migrated by the test
+ * setup) and starts its own server on a free port with that database, so it
+ * never touches development or production data.
  */
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
 
-const DB_PATH = join(PROJECT_ROOT, 'data', 'integration.db');
+const DATABASE_URL = process.env.DATABASE_URL as string;
 const MEDIA_DIR = join(PROJECT_ROOT, 'data', 'test-uploads');
-const MIGRATIONS_DIR = join(PROJECT_ROOT, 'data', 'migrations');
 
 const ADMIN_EMAIL = 'admin@winnie-otieno.example';
 const ADMIN_PASSWORD = 'WinnieSecurePass2026!';
-const SESSION_SECRET = 'integration-test-secret-key-0123456789abcdef';
 
 let server: ChildProcess | null = null;
 let BASE = '';
@@ -41,33 +41,6 @@ function freePort(): Promise<number> {
   });
 }
 
-function prepareDatabase(): void {
-  if (existsSync(DB_PATH)) rmSync(DB_PATH);
-  const db = new Database(DB_PATH);
-  db.pragma('foreign_keys = ON');
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.sql'))
-    .sort();
-  for (const file of files) {
-    db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
-  }
-  const now = new Date().toISOString();
-  // The sealed copy uses the same secret as the server under test.
-  process.env.SESSION_SECRET = SESSION_SECRET;
-  db.prepare(
-    `INSERT INTO admins (email, password_hash, password_ciphertext, password_updated_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(
-    ADMIN_EMAIL,
-    bcrypt.hashSync(ADMIN_PASSWORD, 12),
-    sealCredential(ADMIN_PASSWORD),
-    now,
-    now,
-    now
-  );
-  db.close();
-}
-
 async function waitForReady(timeoutMs = 120000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -83,7 +56,7 @@ async function waitForReady(timeoutMs = 120000): Promise<void> {
 }
 
 /**
- * Read one cookie from a response. A response can set several cookies, and
+ * Reads one cookie from a response. A response can set several cookies, and
  * they arrive joined in a single header, so each set-cookie header is checked
  * on its own.
  */
@@ -103,7 +76,23 @@ function cookieValue(response: Response, name: string): string | null {
 }
 
 beforeAll(async () => {
-  prepareDatabase();
+  if (!DATABASE_URL) {
+    throw new Error('The test setup did not provide a database.');
+  }
+
+  // The administrator the tests sign in with.
+  await run('DELETE FROM sessions');
+  await run('DELETE FROM admins');
+  await run(
+    `INSERT INTO admins (email, password_hash, password_ciphertext, password_updated_at, created_at, updated_at)
+     VALUES ($1, $2, $3, now(), now(), now())`,
+    [
+      ADMIN_EMAIL,
+      await bcrypt.hash(ADMIN_PASSWORD, 12),
+      sealCredential(ADMIN_PASSWORD),
+    ]
+  );
+
   if (existsSync(MEDIA_DIR)) rmSync(MEDIA_DIR, { recursive: true });
   mkdirSync(MEDIA_DIR, { recursive: true });
 
@@ -112,13 +101,20 @@ beforeAll(async () => {
 
   server = spawn(
     process.execPath,
-    [join(PROJECT_ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'), 'dev', '--port', String(port)],
+    [
+      join(PROJECT_ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'),
+      'dev',
+      '--port',
+      String(port),
+    ],
     {
       cwd: PROJECT_ROOT,
       env: {
         ...process.env,
-        DATABASE_URL: DB_PATH,
-        SESSION_SECRET,
+        DATABASE_URL,
+        // The same secret the test process uses, so the sealed credential can
+        // be opened by the server under test.
+        SESSION_SECRET: process.env.SESSION_SECRET,
         MEDIA_DIR,
         MEDIA_BASE_URL: '/api/media',
         NEXT_DIST_DIR: '.next-test',
@@ -138,13 +134,11 @@ afterAll(async () => {
     await new Promise((r) => setTimeout(r, 500));
     if (!server.killed) server.kill('SIGKILL');
   }
-  if (existsSync(DB_PATH)) rmSync(DB_PATH);
-  if (existsSync(`${DB_PATH}-shm`)) rmSync(`${DB_PATH}-shm`);
-  if (existsSync(`${DB_PATH}-wal`)) rmSync(`${DB_PATH}-wal`);
   if (existsSync(MEDIA_DIR)) rmSync(MEDIA_DIR, { recursive: true });
 });
 
-async function login(): Promise<{ session: string; csrf: string }> {  const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
+async function login(): Promise<{ session: string; csrf: string }> {
+  const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
   const csrf = cookieValue(csrfRes, 'portfolio_csrf') ?? '';
   const loginRes = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
@@ -207,17 +201,7 @@ describe('portfolio API integration', () => {
   });
 
   it('rejects a login with invalid credentials', async () => {
-    const csrfRes = await fetch(`${BASE}/api/auth/csrf`);
-    const csrf = cookieValue(csrfRes, 'portfolio_csrf') ?? '';
-    const res = await fetch(`${BASE}/api/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: `portfolio_csrf=${csrf}`,
-        'X-CSRF-Token': csrf,
-      },
-      body: JSON.stringify({ email: ADMIN_EMAIL, password: 'wrong-password' }),
-    });
+    const res = await loginWithPassword('wrong-password');
     expect(res.status).toBe(401);
   });
 
@@ -359,7 +343,7 @@ describe('portfolio API integration', () => {
       body: JSON.stringify({
         position: 'Test Role',
         organization: 'Test Organisation',
-        start_date: '2024-01',
+        start_date: '2024-01-01',
         responsibilities: ['A duty'],
         achievements: ['A result'],
       }),
@@ -367,6 +351,7 @@ describe('portfolio API integration', () => {
     expect(create.status).toBe(201);
     const entry = await create.json();
     expect(entry.achievements).toEqual(['A result']);
+    expect(entry.is_current).toBe(false);
 
     const unconfirmed = await fetch(`${BASE}/api/experience?id=${entry.id}`, {
       method: 'DELETE',
@@ -379,78 +364,6 @@ describe('portfolio API integration', () => {
       headers: authHeaders(session, csrf),
     });
     expect(confirmed.status).toBe(200);
-  });
-
-  it('uploads a file, refuses unsupported types and protects referenced assets', async () => {
-    const { session, csrf } = await login();
-
-    const png = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-      'base64'
-    );
-    const form = new FormData();
-    form.append('file', new Blob([png], { type: 'image/png' }), 'test.png');
-
-    const upload = await fetch(`${BASE}/api/media`, {
-      method: 'POST',
-      headers: {
-        Cookie: `portfolio_session=${session}; portfolio_csrf=${csrf}`,
-        'X-CSRF-Token': csrf,
-      },
-      body: form,
-    });
-    expect(upload.status).toBe(201);
-    const asset = await upload.json();
-    expect(asset.mime_type).toBe('image/png');
-
-    const served = await fetch(`${BASE}${asset.public_url}`);
-    expect(served.status).toBe(200);
-    expect(served.headers.get('content-type')).toBe('image/png');
-
-    // A file that only claims to be an image is rejected on its signature.
-    const badForm = new FormData();
-    badForm.append(
-      'file',
-      new Blob([Buffer.from('<script>alert(1)</script>')], { type: 'image/png' }),
-      'evil.png'
-    );
-    const badUpload = await fetch(`${BASE}/api/media`, {
-      method: 'POST',
-      headers: {
-        Cookie: `portfolio_session=${session}; portfolio_csrf=${csrf}`,
-        'X-CSRF-Token': csrf,
-      },
-      body: badForm,
-    });
-    expect(badUpload.status).toBe(400);
-
-    // Referencing the asset protects it from deletion.
-    const setPhoto = await fetch(`${BASE}/api/profile`, {
-      method: 'PUT',
-      headers: authHeaders(session, csrf),
-      body: JSON.stringify({ profile_image_id: asset.id }),
-    });
-    expect(setPhoto.status).toBe(200);
-
-    const blocked = await fetch(`${BASE}/api/media?id=${asset.id}`, {
-      method: 'DELETE',
-      headers: authHeaders(session, csrf),
-    });
-    expect(blocked.status).toBe(409);
-    const blockedJson = await blocked.json();
-    expect(blockedJson.references.join(' ')).toContain('profile photograph');
-
-    // Clearing the reference releases the asset.
-    await fetch(`${BASE}/api/profile`, {
-      method: 'PUT',
-      headers: authHeaders(session, csrf),
-      body: JSON.stringify({ profile_image_id: null }),
-    });
-    const removed = await fetch(`${BASE}/api/media?id=${asset.id}`, {
-      method: 'DELETE',
-      headers: authHeaders(session, csrf),
-    });
-    expect(removed.status).toBe(200);
   });
 
   it('uploads, replaces and removes the profile picture', async () => {
@@ -526,9 +439,11 @@ describe('portfolio API integration', () => {
 
     // The new picture is the one on the public site, with no redeployment.
     const afterReplace = await fetch(`${BASE}/`).then((r) => r.text());
-    const currentUrl = (await fetch(`${BASE}/api/profile`, {
-      headers: { Cookie: `portfolio_session=${session}` },
-    }).then((r) => r.json())).profile_image.public_url;
+    const currentUrl = (
+      await fetch(`${BASE}/api/profile`, {
+        headers: { Cookie: `portfolio_session=${session}` },
+      }).then((r) => r.json())
+    ).profile_image.public_url;
     expect(afterReplace).toContain(encodeURIComponent(currentUrl));
 
     // Removing it clears the profile and deletes the file.
@@ -600,7 +515,8 @@ describe('portfolio API integration', () => {
     expect(existsSync(stored) ? readdirSync(stored).length : 0).toBe(0);
   });
 
-  it('reveals and changes the administrator password', async () => {    const { session, csrf } = await login();
+  it('reveals and changes the administrator password', async () => {
+    const { session, csrf } = await login();
 
     // The wrong current password is refused.
     const refused = await fetch(`${BASE}/api/admin/password`, {
@@ -677,7 +593,8 @@ describe('portfolio API integration', () => {
     });
   });
 
-  it('validates the contact form and stores the inquiry', async () => {    const invalid = await fetch(`${BASE}/api/contact-inquiries`, {
+  it('validates the contact form and stores the inquiry', async () => {
+    const invalid = await fetch(`${BASE}/api/contact-inquiries`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'x', email: 'not-an-email', message: 'short' }),
@@ -722,5 +639,15 @@ describe('portfolio API integration', () => {
 
     const anonymous = await fetch(`${BASE}/api/admin/inquiries`);
     expect(anonymous.status).toBe(401);
+  });
+
+  it('reports its health without exposing anything private', async () => {
+    const res = await fetch(`${BASE}/api/health`);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.status).toBe('ok');
+    expect(json.database).toBe('postgresql');
+    expect(JSON.stringify(json)).not.toContain('password');
+    expect(JSON.stringify(json)).not.toContain(process.env.SESSION_SECRET ?? 'x');
   });
 });

@@ -21,7 +21,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  const articles = getPublishedArticles();
+  const articles = await getPublishedArticles();
   for (const article of articles) {
     entries.push({
       url: `${BASE_URL}/insights/${article.slug}`,

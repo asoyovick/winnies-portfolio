@@ -1,51 +1,63 @@
-/**
- * Test setup: point the database at a throwaway SQLite file, run the
- * migrations and seed the schema so tests never touch the development
- * database.
- *
- * The file name carries the process id so two runs can never fight over the
- * same database, and the file is removed when the run ends.
- */
+import { readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync, readdirSync, rmSync, existsSync } from 'fs';
-import Database from 'better-sqlite3';
+import pg from 'pg';
+import { createTestDatabase } from './postgres';
 
+/**
+ * Test setup: every test file gets a PostgreSQL database of its own with the
+ * migrations applied, so the tests never touch development or production
+ * data.
+ */
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
-const MIGRATIONS_DIR = join(PROJECT_ROOT, 'data', 'migrations');
+const MIGRATIONS_DIR = join(PROJECT_ROOT, 'db', 'migrations');
 
-const TEST_DB = join(PROJECT_ROOT, 'data', `test-${process.pid}.db`);
-process.env.DATABASE_URL = TEST_DB;
-process.env.SESSION_SECRET = 'test-secret-key-at-least-thirty-two-chars';
-
-const db = new Database(TEST_DB);
-db.pragma('foreign_keys = ON');
-db.pragma('journal_mode = DELETE');
-
-const files = readdirSync(MIGRATIONS_DIR)
-  .filter((file) => file.endsWith('.sql'))
-  .sort();
-for (const file of files) {
-  db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
-}
-db.close();
-
-function cleanup() {
-  for (const suffix of ['', '-shm', '-wal']) {
-    const path = `${TEST_DB}${suffix}`;
-    if (existsSync(path)) {
+async function applyMigrations(url: string): Promise<void> {
+  const client = new pg.Client({ connectionString: url, ssl: false });
+  await client.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version text PRIMARY KEY,
+        applied_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const applied = new Set(
+      (
+        await client.query('SELECT version FROM schema_migrations')
+      ).rows.map((row) => row.version)
+    );
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((file) => file.endsWith('.sql'))
+      .sort();
+    for (const file of files) {
+      const version = file.replace(/\.sql$/, '');
+      if (applied.has(version)) continue;
+      await client.query('BEGIN');
       try {
-        rmSync(path, { force: true });
-      } catch {
-        // The file may still be open; it is ignored by .gitignore either way.
+        await client.query(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
+        await client.query(
+          'INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING',
+          [version]
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
       }
     }
+  } finally {
+    await client.end();
   }
 }
 
-process.on('exit', cleanup);
-process.on('SIGINT', () => {
-  cleanup();
-  process.exit(1);
+const database = await createTestDatabase();
+await applyMigrations(database.url);
+
+process.env.DATABASE_URL = database.url;
+process.env.SESSION_SECRET = 'test-secret-key-with-at-least-thirty-two-chars';
+
+process.on('exit', () => {
+  void database.cleanup();
 });

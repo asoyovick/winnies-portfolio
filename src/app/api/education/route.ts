@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { validateCsrfToken, requireAdmin } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { get, query, run } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -22,16 +22,16 @@ function entryResponse(row: any) {
 }
 
 export async function GET() {
-  const rows = db
-    .prepare('SELECT * FROM education ORDER BY display_order ASC, created_at DESC')
-    .all() as any[];
+  const rows = await query<any>(
+    'SELECT * FROM education ORDER BY display_order ASC, created_at DESC'
+  );
   return NextResponse.json(rows.map(entryResponse));
 }
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -54,34 +54,33 @@ export async function POST(request: Request) {
     }
   }
 
-  const now = new Date().toISOString();
   // Ongoing qualifications do not require completion dates.
   const endDate = body.status === 'ongoing' ? null : body.end_date || null;
 
-  const result = db.prepare(
-    `INSERT INTO education (institution, qualification, field_of_study, start_date, end_date, status, description, display_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    body.institution,
-    body.qualification,
-    body.field_of_study ?? '',
-    body.start_date || null,
-    endDate,
-    body.status,
-    body.description ?? '',
-    Number(body.display_order ?? 0),
-    now,
-    now
+  const row = await get<any>(
+    `INSERT INTO education (
+       institution, qualification, field_of_study, start_date, end_date,
+       status, description, display_order, created_at, updated_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
+     RETURNING *`,
+    [
+      body.institution,
+      body.qualification,
+      body.field_of_study ?? '',
+      body.start_date || null,
+      endDate,
+      body.status,
+      body.description ?? '',
+      Number(body.display_order ?? 0),
+    ]
   );
-
-  const row = db.prepare('SELECT * FROM education WHERE id = ?').get(result.lastInsertRowid);
   return NextResponse.json(entryResponse(row), { status: 201 });
 }
 
 export async function PUT(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -103,9 +102,9 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Entry id is required.' }, { status: 400 });
   }
 
-  const now = new Date().toISOString();
   const fields: string[] = [];
   const values: unknown[] = [];
+  let index = 1;
 
   const allowed: Record<string, unknown> = {};
   if (typeof body.institution === 'string') allowed.institution = body.institution.trim();
@@ -118,7 +117,7 @@ export async function PUT(request: Request) {
   if (typeof body.display_order === 'number') allowed.display_order = body.display_order;
 
   for (const [key, value] of Object.entries(allowed)) {
-    fields.push(`${key} = ?`);
+    fields.push(`${key} = $${index++}`);
     values.push(value);
   }
 
@@ -127,15 +126,18 @@ export async function PUT(request: Request) {
   }
 
   if (allowed.status === 'ongoing') {
-    fields.push('end_date = ?');
-    values.push(null);
+    fields.push('end_date = NULL');
   }
 
-  fields.push('updated_at = ?');
-  values.push(now, id);
+  fields.push('updated_at = now()');
+  values.push(id);
 
-  db.prepare(`UPDATE education SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  const row = db.prepare('SELECT * FROM education WHERE id = ?').get(id);
+  await run(
+    `UPDATE education SET ${fields.join(', ')} WHERE id = $${index}`,
+    values
+  );
+
+  const row = await get<any>('SELECT * FROM education WHERE id = $1', [id]);
   if (!row) {
     return NextResponse.json({ error: 'Entry not found.' }, { status: 404 });
   }
@@ -145,7 +147,7 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get('portfolio_session')?.value ?? null;
-  const admin = requireAdmin(sessionToken);
+  const admin = await requireAdmin(sessionToken);
   if ('error' in admin) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
@@ -161,7 +163,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Entry id is required.' }, { status: 400 });
   }
 
-  const row = db.prepare('SELECT id FROM education WHERE id = ?').get(id);
+  const row = await get<any>('SELECT id FROM education WHERE id = $1', [id]);
   if (!row) {
     return NextResponse.json({ error: 'Entry not found.' }, { status: 404 });
   }
@@ -174,6 +176,6 @@ export async function DELETE(request: Request) {
     );
   }
 
-  db.prepare('DELETE FROM education WHERE id = ?').run(id);
+  await run('DELETE FROM education WHERE id = $1', [id]);
   return NextResponse.json({ ok: true });
 }

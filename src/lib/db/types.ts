@@ -1,54 +1,11 @@
-import Database from 'better-sqlite3';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = join(__dirname, '..', '..');
-const DB_PATH = process.env.DATABASE_URL || join(PROJECT_ROOT, 'data', 'app.db');
-
-export function openDatabase(databasePath: string = DB_PATH): Database.Database {
-  const database = new Database(databasePath);
-  database.pragma('journal_mode = WAL');
-  database.pragma('foreign_keys = ON');
-  return database;
-}
-
-/*
- * One synchronous connection per module instance. better-sqlite3 with WAL mode
- * handles concurrent reads well enough for this single-instance site.
- *
- * The connection is closed when the process shuts down. Without that, the
- * native module is finalised after the V8 environment has been torn down and
- * better-sqlite3 aborts the process with
- * "Assertion failed: (env) != nullptr".
- */
-export const db: Database.Database = openDatabase();
-
-let closed = false;
-
-export function closeDatabase(): void {
-  if (closed) return;
-  closed = true;
-  try {
-    db.close();
-  } catch {
-    // Already closed, or the file was removed underneath us.
-  }
-}
-
-if (typeof process !== 'undefined' && process.versions?.node) {
-  const shutdown = () => closeDatabase();
-  // Not on 'beforeExit': that can fire while the server is still serving.
-  process.once('exit', shutdown);
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
-  process.once('SIGHUP', shutdown);
-}
+/** Row shapes shared by the data layer and the API routes. */
 
 export type AdminUser = {
   id: number;
   email: string;
   password_hash: string;
+  password_ciphertext: string;
+  password_updated_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -137,6 +94,8 @@ export type MediaAsset = {
   mime_type: string;
   size: number;
   path: string;
+  bucket: string | null;
+  visibility: 'public' | 'private';
   width: number | null;
   height: number | null;
   uploaded_by_admin_id: number | null;

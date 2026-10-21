@@ -1,8 +1,8 @@
 import { getProfile } from '@/lib/content';
 import { Reveal } from './Reveal';
 
-export default function About() {
-  const profile = getProfile();
+export default async function About() {
+  const profile = await getProfile();
   const biography = (profile?.biography || '').trim();
   const paragraphs = biography
     .split('\n\n')

@@ -1,17 +1,12 @@
+import { get, run } from './db';
+
 /**
- * Simple in-memory fixed-window rate limiter.
+ * Rate limiting.
  *
- * Keys are per IP + route. Counts are reset after the window. Suitable for a
- * single-instance deployment. For multi-instance production, replace with a
- * Redis-backed store keyed the same way.
+ * The counters live in PostgreSQL so the limit is shared by every instance of
+ * the application: on a platform that runs more than one instance, an
+ * in-memory counter would let an attacker multiply their attempts.
  */
-interface Window {
-  count: number;
-  resetAt: number;
-}
-
-const windows = new Map<string, Window>();
-
 export type RateLimitResult = {
   allowed: boolean;
   limit: number;
@@ -19,28 +14,41 @@ export type RateLimitResult = {
   resetAt: number;
 };
 
-export function rateLimit(
+export async function rateLimit(
   key: string,
   options: { limit: number; windowMs: number }
-): RateLimitResult {
-  const now = Date.now();
+): Promise<RateLimitResult> {
   const { limit, windowMs } = options;
-  const existing = windows.get(key);
 
-  if (!existing || now >= existing.resetAt) {
-    windows.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, limit, remaining: limit - 1, resetAt: now + windowMs };
-  }
+  // One atomic statement: count the attempt and start a new window when the
+  // old one has passed.
+  const row = await get<{ count: number; reset_at: string }>(
+    `INSERT INTO rate_limits (key, count, reset_at)
+     VALUES ($1, 1, now() + ($2::bigint * interval '1 millisecond'))
+     ON CONFLICT (key) DO UPDATE SET
+       count = CASE WHEN rate_limits.reset_at <= now() THEN 1 ELSE rate_limits.count + 1 END,
+       reset_at = CASE WHEN rate_limits.reset_at <= now()
+                       THEN EXCLUDED.reset_at
+                       ELSE rate_limits.reset_at END
+     RETURNING count, reset_at`,
+    [key, windowMs]
+  );
 
-  existing.count += 1;
-  const remaining = Math.max(0, limit - existing.count);
-  return { allowed: existing.count <= limit, limit, remaining, resetAt: existing.resetAt };
+  const count = Number(row?.count ?? 1);
+  const resetAt = row?.reset_at ? new Date(row.reset_at).getTime() : Date.now() + windowMs;
+
+  return {
+    allowed: count <= limit,
+    limit,
+    remaining: Math.max(0, limit - count),
+    resetAt,
+  };
 }
 
 export function rateLimitKey(ip: string | undefined, route: string): string {
   return `rl:${route}:${ip ?? 'unknown'}`;
 }
 
-export function clearRateLimit(key: string): void {
-  windows.delete(key);
+export async function clearRateLimit(key: string): Promise<void> {
+  await run('DELETE FROM rate_limits WHERE key = $1', [key]);
 }
