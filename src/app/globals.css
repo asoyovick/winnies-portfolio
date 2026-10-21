@@ -1262,6 +1262,14 @@ select {
   color: var(--muted);
   margin-top: 1rem;
 }
+.article__cover {
+  margin: 1.75rem 0 0;
+}
+.article__cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .article__body {
   margin-top: clamp(2rem, 5vh, 3rem);
   font-size: var(--step-body);

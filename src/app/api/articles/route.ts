@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { validateCsrfToken, requireAdmin, authenticateRequest } from '@/lib/auth';
 import { get, query, run } from '@/lib/db';
 import { slugify } from '@/lib/validation';
+import { publishAsset } from '@/lib/media';
 
 export const runtime = 'nodejs';
 
@@ -108,6 +109,10 @@ export async function POST(request: Request) {
       publishedAt,
     ]
   );
+  // A cover image is shown on the published article, so it has to be public.
+  if (row.featured_image_id) {
+    await publishAsset(Number(row.featured_image_id));
+  }
   return NextResponse.json(articleResponse(row), { status: 201 });
 }
 
@@ -178,6 +183,11 @@ export async function PUT(request: Request) {
   values.push(id);
 
   await run(`UPDATE articles SET ${fields.join(', ')} WHERE id = $${index}`, values);
+
+  // A cover image is shown on the published article, so it has to be public.
+  if (allowed.featured_image_id) {
+    await publishAsset(Number(allowed.featured_image_id));
+  }
 
   const row = await get<any>('SELECT * FROM articles WHERE id = $1', [id]);
   if (!row) {
