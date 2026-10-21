@@ -29,7 +29,7 @@ function isPostgresUrl(value: string): boolean {
 }
 
 export function readDatabaseConfig(
-  env: NodeJS.ProcessEnv = process.env
+  env: Record<string, string | undefined> = process.env
 ): DatabaseConfig {
   const raw = (env[DATABASE_ENV_VAR] ?? '').trim();
 

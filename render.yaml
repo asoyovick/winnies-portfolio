@@ -1,0 +1,45 @@
+# Render Blueprint for Winnie Awuor Otieno's portfolio.
+#
+#   1. Create the Supabase project and run db/migrations and
+#      db/supabase/storage.sql (see DEPLOYMENT.md).
+#   2. Push this branch, then:  render blueprint launch
+#   3. Fill in the values marked "sync: false" in the Render dashboard.
+#
+# No secret value is stored in this file. The two marked
+# "generateValue: true" are created by Render itself.
+
+services:
+  - type: web
+    name: winnie-portfolio
+    runtime: node
+    plan: starter
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22.16.0"
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SITE_NAME
+        value: Winnie Awuor Otieno — Accounting & Tax
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false # the deployed address, e.g. https://winnie-portfolio.onrender.com
+      - key: DATABASE_URL
+        sync: false # the pooled Supabase connection string
+      - key: DATABASE_POOL_SIZE
+        value: "5"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_SETUP_TOKEN
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false # https://<project-ref>.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # server-side only
+      - key: SUPABASE_PUBLIC_BUCKET
+        value: portfolio-public
+      - key: SUPABASE_PRIVATE_BUCKET
+        value: portfolio-private
