@@ -214,6 +214,9 @@ async function main() {
     await client.query('BEGIN');
 
     // --- profile ------------------------------------------------------
+    // The profile row always exists (the migration creates it). Only the
+    // fields that are still empty are filled in, so anything Winnie has
+    // edited in the admin panel is left alone.
     const profile = await client.query(
       'SELECT id FROM profile_settings WHERE id = 1 FOR UPDATE'
     );
@@ -236,8 +239,32 @@ async function main() {
       );
       inserted += 1;
     } else {
-      // The profile already exists: leave whatever Winnie has edited in place.
-      kept += 1;
+      const filled = await client.query(
+        `UPDATE profile_settings SET
+           biography = CASE WHEN biography = '' THEN $1 ELSE biography END,
+           hero_heading = CASE WHEN hero_heading = '' THEN $2 ELSE hero_heading END,
+           hero_subheading = CASE WHEN hero_subheading = '' THEN $3 ELSE hero_subheading END,
+           location = CASE WHEN location = '' THEN $4 ELSE location END,
+           professional_title = CASE WHEN professional_title = '' THEN $5 ELSE professional_title END,
+           display_name = CASE WHEN display_name = '' THEN $6 ELSE display_name END,
+           updated_at = CASE WHEN biography = '' THEN $7 ELSE updated_at END
+         WHERE id = 1
+         RETURNING biography`,
+        [
+          biography,
+          heroHeading,
+          heroSubheading,
+          'Kisumu, Kenya',
+          'Accounting, Audit & Tax Professional',
+          'Winnie Awuor Otieno',
+          NOW,
+        ]
+      );
+      if (filled.rows[0]?.biography) {
+        inserted += 1;
+      } else {
+        kept += 1;
+      }
     }
 
     // --- experience ---------------------------------------------------
