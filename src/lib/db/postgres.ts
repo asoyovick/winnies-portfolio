@@ -87,3 +87,14 @@ export async function closePool(): Promise<void> {
   pool = null;
   await current.end();
 }
+
+// The pool is closed when the process shuts down, so the connections are
+// returned to the pooler instead of being dropped.
+if (typeof process !== 'undefined' && process.versions?.node) {
+  const shutdown = () => {
+    void closePool();
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+  process.once('SIGHUP', shutdown);
+}

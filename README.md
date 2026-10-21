@@ -10,25 +10,27 @@ contact) plus published insight articles. Everything Winnie publishes is
 edited from the administration panel — no code changes are needed to update
 the site.
 
+**Deployment:** Render runs the application, Supabase provides PostgreSQL and
+object storage. The full guide is in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
 ## Architecture
 
 - **Frontend:** React 19 + Next.js 16 (App Router), server-rendered public
   pages, Tailwind CSS v4 for the reset plus a hand-written token layer.
-- **Backend:** Next.js route handlers (Node.js runtime) over SQLite
-  (`better-sqlite3`). The same process serves the public site and the admin
-  API.
-- **Database:** SQLite file (`data/app.db` by default), WAL mode, schema in
-  `data/migrations/*.sql`.
-- **Media storage:** local filesystem (`data/uploads` by default) or an
-  S3-compatible bucket when the `S3_*` variables are set. Credentials stay on
-  the server only.
+- **Backend:** Next.js route handlers (Node.js runtime) over PostgreSQL.
+  The same process serves the public site and the admin API.
+- **Database:** Supabase PostgreSQL, reached through a pooled `pg` client.
+  The schema and its migrations live in `db/migrations/`.
+- **Media storage:** Supabase Storage in production (two buckets: a public
+  one and a private one), the local filesystem in development, or any
+  S3-compatible store. Files are never stored in the database.
 - **Authentication:** cookie-based sessions in the database, bcrypt password
-  hashing (cost 12), CSRF double-submit protection, login rate limiting,
-  `HttpOnly`/`SameSite`/`Secure` session cookies.
+  hashing (cost 12), CSRF double-submit protection, login rate limiting kept
+  in the database, `HttpOnly`/`SameSite`/`Secure` session cookies.
 - **Route protection:** `src/proxy.ts` (the Next 16 name for middleware)
-  redirects every `/admin/*` page to the sign-in page without a valid session.
+  redirects signed-out visitors away from `/admin/*`.
 - **Tests:** Vitest — unit tests plus an end-to-end suite that starts its own
-  Next.js server with its own database.
+  Next.js server against a real PostgreSQL database.
 
 ## Content source
 
@@ -89,24 +91,25 @@ npm install
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in the values. Secrets must never be
-committed to version control.
-
-```bash
-cp .env.example .env
-```
+committed to version control. The full list, with the values Render and
+Supabase expect, is in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_SITE_URL` | Public URL of the deployed site (used for the sitemap) |
 | `NEXT_PUBLIC_SITE_NAME` | Site name shown in metadata |
-| `DATABASE_URL` | Path to the SQLite file (default `data/app.db`) |
-| `MEDIA_DIR` | Local upload directory (default `data/uploads`) |
+| `DATABASE_URL` | PostgreSQL connection string (use the Supabase **pooler**) |
+| `DATABASE_POOL_SIZE` | Connections in the pool (default 5) |
+| `SUPABASE_URL` | Supabase project URL, for Storage |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key, server-side only |
+| `SUPABASE_PUBLIC_BUCKET` / `SUPABASE_PRIVATE_BUCKET` | Bucket names (default `portfolio-public` / `portfolio-private`) |
+| `MEDIA_DIR` | Local upload directory, used when Supabase is not configured |
 | `MEDIA_BASE_URL` | URL path for media (default `/api/media`) |
 | `SESSION_SECRET` | At least 32 random characters; signs the session cookies |
 | `SESSION_MAX_AGE` | Session lifetime in seconds (default 604800 = 7 days) |
 | `ADMIN_SETUP_TOKEN` | Token guarding the one-time HTTP admin setup endpoint |
-| `LOGIN_RATE_LIMIT` / `LOGIN_RATE_WINDOW_MS` | Login attempts allowed per IP (default 5 per 15 minutes) |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` | Optional: S3-compatible production media storage |
+| `LOGIN_RATE_LIMIT` / `LOGIN_RATE_WINDOW_MS` | Login attempts allowed per address |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` | Optional: S3-compatible storage instead of Supabase Storage |
 | `S3_PUBLIC_BASE_URL` | Public base URL for S3 assets |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | Optional: email notifications for contact inquiries |
 | `CONTACT_EMAIL` | Email address contact inquiries are forwarded to (optional) |
@@ -114,23 +117,27 @@ cp .env.example .env
 ## Database setup
 
 ```bash
-npm run migrate
+DATABASE_URL="postgresql://…" npm run migrate
 ```
 
-This creates `data/app.db` and all tables. It is idempotent and safe to
-re-run.
+This applies every file in `db/migrations/` once, in order, and records what it
+has applied in `schema_migrations`. It is idempotent and safe to re-run.
+
+Migrations are never applied automatically when the application starts: run
+them explicitly before deploying a release that depends on them.
 
 ## Create the first administrator
 
 There is no default administrator account and no known credentials are ever
 seeded. Create the first administrator through the protected setup process.
 
-**Option A — setup script (recommended for direct server access):**
+**Option A — setup script (recommended):**
 
 ```bash
-DATABASE_URL="data/app.db" ADMIN_EMAIL="winnie@example.com" \
-  ADMIN_PASSWORD="a-strong-password-at-least-10-chars" \
-  node scripts/setup-admin.js
+DATABASE_URL="postgresql://…" SESSION_SECRET="…" \
+  ADMIN_EMAIL="winnie@example.com" \
+  ADMIN_PASSWORD="a-strong-password-of-at-least-12-characters" \
+  npm run setup-admin
 ```
 
 **Option B — HTTP setup endpoint (only when no administrator exists yet):**
@@ -139,22 +146,22 @@ DATABASE_URL="data/app.db" ADMIN_EMAIL="winnie@example.com" \
 curl -X POST http://localhost:3000/api/admin/setup \
   -H "Content-Type: application/json" \
   -H "x-admin-setup-token: <ADMIN_SETUP_TOKEN>" \
-  -d '{"email":"winnie@example.com","password":"a-strong-password-at-least-10-chars"}'
+  -d '{"email":"winnie@example.com","password":"a-strong-password-of-at-least-12-characters"}'
 ```
 
 After the first administrator exists, the setup endpoint always rejects
-requests.
+requests. A lost password is reset on the server with `RESET_ADMIN=1`.
 
 ## Seed public content from the CV
 
 ```bash
-npm run seed
+DATABASE_URL="postgresql://…" npm run seed
 ```
 
 This seeds the profile, experience, education and expertise from Winnie's CV.
-It is safe to re-run (it updates existing rows by unique key and never
-duplicates). It never creates an administrator account and never publishes
-referee contact details.
+It is safe to re-run: **a row that already exists is left alone**, so anything
+Winnie has edited in the admin panel is never overwritten. It never creates an
+administrator account and never publishes referee contact details.
 
 ## Running the application
 
@@ -171,8 +178,16 @@ npm run build
 npm run start     # http://localhost:3000
 ```
 
-Set `DATABASE_URL`, `SESSION_SECRET` and the other production variables in the
-hosting environment before starting.
+`next start` listens on `PORT`, which is what Render sets. Set `DATABASE_URL`,
+`SESSION_SECRET` and the Supabase variables in the hosting environment before
+starting.
+
+## Health check
+
+`GET /api/health` reports whether the application can reach its database and
+which storage driver is in use. It never exposes credentials, environment
+variables, session data or contact inquiries. Render uses it as its health
+check path.
 
 ## Admin panel
 
@@ -233,22 +248,20 @@ RESET_ADMIN=1 ADMIN_EMAIL="winnie@example.com" ADMIN_PASSWORD="…" \
 
 ## Media storage
 
-Uploads are stored persistently in `MEDIA_DIR` (`data/uploads` by default),
-which survives application restarts and redeploys. Do not rely on a temporary
-directory. The layout is:
+Uploads are stored in Supabase Storage in production and on the local
+filesystem in development. The storage driver is chosen by configuration:
+Supabase when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set, S3 when
+the `S3_*` variables are set, and the filesystem otherwise.
 
-```
-data/uploads/
-  profile/<generated-name>.png   Winnie's profile picture
-  <generated-name>.pdf           other uploads
-```
+Two buckets are used:
 
-The folder is created automatically the first time something is uploaded.
+| Bucket | Public | Holds |
+|---|---|---|
+| `portfolio-public` | yes | the profile photograph, hero images, published article covers, and the CV that has been published |
+| `portfolio-private` | no | every other uploaded file; only ever handed to a signed-in administrator |
 
-For production object storage, set the `S3_*` variables. Uploads then go to
-an S3-compatible bucket instead of the local filesystem, with the same folder
-layout. Storage credentials are read only on the server and are never exposed
-to the browser.
+The buckets and their access policies are in `db/supabase/storage.sql`. The
+service-role key stays on the server and never reaches the browser.
 
 Uploads are validated by file signature, not by extension: JPEG, PNG, WebP
 images and PDF documents are accepted (profile pictures up to 5 MB, other
@@ -287,11 +300,32 @@ npm run typecheck # tsc --noEmit
 npm run build     # production build
 ```
 
-`npm test` starts its own Next.js server on a free port with its own database
-and upload directory, so it runs on its own and never touches the development
-data. It covers the public pages, login and logout, unauthorised access, CSRF,
-draft privacy, script stripping in article bodies, upload validation,
-reference-protected assets, entry deletion confirmations and the contact form.
+`npm test` starts its own PostgreSQL server: a Docker container is started for
+the run (or `TEST_DATABASE_URL` is used if it is set), and every test file
+gets a database of its own with the migrations applied. The suite then starts
+its own Next.js server against that database, so it never touches development
+or production data. It covers the public pages, login and logout,
+unauthorised access, CSRF, draft privacy, article publishing, script
+stripping in article bodies, upload validation, reference-protected assets,
+the profile picture, the password change, rate limiting, the contact form and
+the health check.
+
+## Moving an existing site
+
+The portfolio was first built on SQLite with files on disk. To move it to
+Supabase:
+
+```bash
+cp data/app.db "backups/app.db-$(date +%F).sqlite"     # back it up first
+DATABASE_URL="postgresql://…" npm run migrate
+DATABASE_URL="postgresql://…" npm run migrate:from-sqlite   # the records
+DATABASE_URL="postgresql://…" SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
+  npm run migrate:media                                    # the files
+```
+
+Both scripts are repeatable and never delete the SQLite database or the files
+on disk. The full procedure, with the verification steps, is in
+[DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Design inspection
 
@@ -307,44 +341,38 @@ brief asks for motion used sparingly.
 
 ## Deployment
 
-1. Set all production environment variables (see `Configuration`).
-2. Run `npm run migrate` on the target database.
-3. Create the first administrator (see `Create the first administrator`).
-4. Run `npm run seed` to populate public content.
-5. Build and start: `npm run build && npm run start`.
-6. Configure persistent media storage (`MEDIA_DIR` on a persistent volume,
-   or an S3 bucket).
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the whole process: Supabase
+(project, pooled connection, migrations, buckets, policies), the application
+checks, Render (build and start commands, environment variables), the one-off
+initialisation and the verification checklist.
+
+`render.yaml` is a Blueprint that describes the web service, with no secret
+value in it.
 
 ### Notes for a hosted deployment
 
-- **The database and the uploads need a persistent disk.** `data/app.db` and
-  `data/uploads/` live on the machine's filesystem; mount a persistent volume
-  at `data/`, or point `MEDIA_DIR` and `DATABASE_URL` at a mounted path.
-- **`better-sqlite3` is pinned to an exact version** (`11.10.0`). It is a
-  native module, and a different build of it has been seen to abort the
-  process at teardown with
-  `Assertion failed: (env) != nullptr`. The pin keeps the build identical to
-  the one the tests run against.
-- **The database is closed when the process shuts down** (`SIGTERM`, `SIGINT`,
-  `SIGHUP`, `exit`). Without that, the native module is finalised after the
-  V8 environment has been torn down and the process aborts with a core dump.
+- **The database and the uploads must live outside Render.** The database is
+  Supabase PostgreSQL and the uploads are Supabase Storage. Render's own disk
+  is ephemeral, so nothing that has to survive a redeploy may be written
+  there.
+- **Use the pooled connection string.** Render is IPv4; Supabase's direct
+  connection address is IPv6-only.
+- **The service-role key is server-side.** It is used to reach Storage, and it
+  never reaches the browser.
+- **Migrations are applied explicitly**, never at application start-up.
 - **The route guard does not open the database.** `src/proxy.ts` runs in its
-  own isolate, where a native SQLite handle cannot be finalised safely, so it
-  only checks for the presence of a session cookie. The real check happens in
-  the admin layout and in every admin API route, where the database is
-  already open.
+  own isolate, so it only checks for the presence of a session cookie. The real
+  check happens in the admin layout and in every admin API route.
 - `next start` listens on `PORT`, which is what platforms such as Render
   expect.
 
-
 ## Backups
 
-- **Database:** copy `data/app.db` (and `-wal`/`-shm` if present) to a backup
-  location, e.g. `cp data/app.db backups/app.db-$(date +%F).sqlite`.
-- **Uploaded assets:** back up the `MEDIA_DIR` directory (`data/uploads` by
-  default, or the S3 bucket).
-- Restore by copying the database and assets back and restarting the
-  application.
+- **Database:** `pg_dump` from the Supabase dashboard, or
+  `pg_dump "$DATABASE_URL" > backup.sql`, into your own storage.
+- **Uploaded assets:** the Supabase buckets, exported from the dashboard.
+- The old SQLite database and its uploads folder are worth keeping until the
+  new setup has been verified.
 
 ## Security notes
 
@@ -363,3 +391,8 @@ brief asks for motion used sparingly.
 - Contact inquiries are never exposed through public APIs.
 - No referee phone numbers, email addresses, or confidential client data are
   published.
+- The database tables have row level security enabled, so the Supabase
+  anon and authenticated keys cannot read them through the Supabase API; the
+  application connects as the table owner.
+- Private files are never served to a visitor: the media route checks the
+  session before it hands over an asset that is not public.
