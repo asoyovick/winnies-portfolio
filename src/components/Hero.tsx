@@ -84,10 +84,14 @@ export default async function Hero() {
           sizes="100vw"
           className="hero__image"
         />
-        <div className="hero__scrim" />
       </div>
 
       <div className="wrap hero__content">
+        <div className="hero__badge">
+          <span className="hero__badge-pulse" />
+          <span>Accounting · Audit · Tax Advisory · Kisumu, Kenya</span>
+        </div>
+
         <h1 id="hero-heading" className="hero__title">
           {headingLines.map((line, index) => (
             <span className="hero__title-line" key={index}>
@@ -97,8 +101,27 @@ export default async function Hero() {
         </h1>
         {subheading ? <p className="hero__lead">{subheading}</p> : null}
         <div className="hero__actions">
-          <a href="#contact" className="btn btn--pill">
-            Get in touch
+          <a href="#contact" className="btn btn--pill btn--hero-primary">
+            <span>Get in touch</span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="btn__icon"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </a>
+          <a
+            href="#experience"
+            className="btn btn--hero-ghost"
+            aria-label="Explore my experience"
+          >
+            <span>View Experience</span>
           </a>
           <a
             href="#experience"
