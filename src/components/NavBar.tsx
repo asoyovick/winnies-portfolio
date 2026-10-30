@@ -50,19 +50,25 @@ export function NavBar({ pictureUrl }: { pictureUrl: string | null }) {
   }, [open, close]);
 
   const mark = pictureUrl ? (
-    <Image
-      src={pictureUrl}
-      alt="Winnie Awuor Otieno"
-      width={80}
-      height={80}
-      sizes="40px"
-      className="nav__picture"
-      priority
-    />
+    <div className="nav__avatar-wrap">
+      <Image
+        src={pictureUrl}
+        alt="Winnie Awuor Otieno"
+        width={80}
+        height={80}
+        sizes="44px"
+        className="nav__picture"
+        priority
+      />
+      <span className="nav__status-dot" title="Available for advisory" />
+    </div>
   ) : (
-    <span className="nav__mark" role="img" aria-label="Winnie Awuor Otieno">
-      WA
-    </span>
+    <div className="nav__avatar-wrap">
+      <span className="nav__mark" role="img" aria-label="Winnie Awuor Otieno">
+        WA
+      </span>
+      <span className="nav__status-dot" title="Available for advisory" />
+    </div>
   );
 
   return (
@@ -75,9 +81,10 @@ export function NavBar({ pictureUrl }: { pictureUrl: string | null }) {
         <div className="wrap nav-inner">
           <Link href="/#home" className="wordmark" onClick={close}>
             {mark}
-            <span className="wordmark__name" aria-hidden="true">
-              Winnie Awuor Otieno
-            </span>
+            <div className="wordmark__text">
+              <span className="wordmark__name">Winnie Awuor Otieno</span>
+              <span className="wordmark__role">Audit · Tax · Advisory</span>
+            </div>
           </Link>
           <nav className="nav-links" aria-label="Main navigation">
             {LINKS.map((link) => (
@@ -86,9 +93,11 @@ export function NavBar({ pictureUrl }: { pictureUrl: string | null }) {
               </Link>
             ))}
           </nav>
-          <Link href="/#contact" className="btn btn--nav">
-            Get in touch
-          </Link>
+          <div className="nav-actions">
+            <Link href="/#contact" className="btn btn--nav">
+              Get in touch
+            </Link>
+          </div>
           <button
             ref={toggleRef}
             className="nav-toggle"
@@ -96,7 +105,9 @@ export function NavBar({ pictureUrl }: { pictureUrl: string | null }) {
             aria-controls="mobile-menu"
             onClick={() => setOpen((o) => !o)}
           >
-            {open ? 'Close' : 'Menu'}
+            <span className="nav-toggle__bar" />
+            <span className="nav-toggle__bar" />
+            <span className="visually-hidden">{open ? 'Close' : 'Menu'}</span>
           </button>
         </div>
       </header>
@@ -110,6 +121,17 @@ export function NavBar({ pictureUrl }: { pictureUrl: string | null }) {
           aria-label="Site navigation"
         >
           <div className="mobile-sheet__inner">
+            <div className="mobile-sheet__head">
+              <span className="mobile-sheet__title">Navigation</span>
+              <button
+                type="button"
+                className="mobile-sheet__close"
+                onClick={close}
+                aria-label="Close menu"
+              >
+                ✕
+              </button>
+            </div>
             <ul className="mobile-sheet__list">
               <li>
                 <Link href="/#home" className="mobile-link" onClick={close}>
@@ -124,9 +146,11 @@ export function NavBar({ pictureUrl }: { pictureUrl: string | null }) {
                 </li>
               ))}
             </ul>
-            <button type="button" className="mobile-link mobile-link--close" onClick={close}>
-              Close menu
-            </button>
+            <div className="mobile-sheet__actions">
+              <Link href="/#contact" className="btn btn--primary btn--mobile" onClick={close}>
+                Schedule a Consultation
+              </Link>
+            </div>
           </div>
         </div>
       ) : null}
