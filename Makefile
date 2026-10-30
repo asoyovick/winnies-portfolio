@@ -1,4 +1,4 @@
-.PHONY: install dev build start lint typecheck check test migrate migrate-sqlite migrate-from-sqlite migrate-media db db-stop setup-admin seed clean help
+.PHONY: install dev build start deploy lint typecheck check test migrate migrate-sqlite migrate-from-sqlite migrate-media db db-stop setup-admin seed clean help
 
 # Default target
 help:
@@ -7,6 +7,7 @@ help:
 	@echo "  dev                 Start the dev server"
 	@echo "  build               Build for production"
 	@echo "  start               Start the production server"
+	@echo "  deploy             Build for production and push to origin main (triggers Render deploy)"
 	@echo "  lint                Run ESLint"
 	@echo "  typecheck           Run TypeScript type checking"
 	@echo "  check               Run lint + typecheck + tests"
@@ -32,6 +33,10 @@ build:
 
 start:
 	npm run start
+
+deploy:
+	npm run build
+	git push origin main
 
 lint:
 	npm run lint
