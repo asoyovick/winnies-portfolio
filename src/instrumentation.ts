@@ -4,19 +4,14 @@
  * Runs once when the server starts. It checks that the database can be
  * reached, so a misconfigured connection shows up in the host's logs
  * immediately rather than as a failing first request.
+ *
+ * Next.js compiles this hook for both the Node.js and the Edge runtime, so
+ * Node.js-only work lives in `instrumentation.node.ts` and is only pulled in
+ * while the Node.js runtime is the active one.
  */
 export async function register(): Promise<void> {
-  // The file is compiled for more than one runtime; only the Node.js one has a
-  // database and process signals.
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
-
-  const { checkDatabase } = await import('./lib/db/health');
-  await checkDatabase();
-
-  const { closePool } = await import('./lib/db');
-  const shutdown = () => {
-    void closePool();
-  };
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { register: registerNode } = await import('./instrumentation.node');
+    await registerNode();
+  }
 }
