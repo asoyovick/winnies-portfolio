@@ -26,10 +26,11 @@ function Arrow() {
 
 export default function TaxMap() {
   return (
-    <section className="section section--field" aria-labelledby="taxmap-heading">
+    <section className="section section--dark" aria-labelledby="taxmap-heading">
       <div className="wrap">
         <Reveal>
           <div className="taxmap__head">
+            <span className="section-badge section-badge--light">Statutory Workflow</span>
             <h2 id="taxmap-heading" className="section__head">
               How a return gets done
             </h2>
@@ -42,56 +43,74 @@ export default function TaxMap() {
 
         <Reveal>
           <div className="taxmap">
-            <ul className="taxmap__sources">
-              {TAXES.map((tax) => (
-                <li key={tax.label} className="taxmap__source">
-                  <span className="taxmap__source-label">{tax.label}</span>
-                  <span className="taxmap__source-note">{tax.note}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Arrow />
-
-            <div className="taxmap__node">
-              <span className="taxmap__mark" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
-                  <path d="M14 3.5V8h4" />
-                  <path d="m9 14.5 2 2 4-4.5" />
-                </svg>
-              </span>
-              <h3 className="taxmap__title">Prepared and reviewed</h3>
-              <p className="taxmap__note">
-                Each return is checked against the records behind it before it is
-                filed, and the working is kept.
-              </p>
+            <div className="taxmap__step">
+              <div className="taxmap__step-header">
+                <span className="taxmap__step-num">01</span>
+                <span className="taxmap__step-title">Source Filings</span>
+              </div>
+              <ul className="taxmap__sources">
+                {TAXES.map((tax) => (
+                  <li key={tax.label} className="taxmap__source">
+                    <span className="taxmap__source-label">{tax.label}</span>
+                    <span className="taxmap__source-note">{tax.note}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <Arrow />
 
-            <div className="taxmap__node">
-              <span className="taxmap__mark" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-2.5Z" />
-                  <path d="m9 12 2 2 4-4" />
-                </svg>
-              </span>
-              <h3 className="taxmap__title">KRA compliance</h3>
-              <p className="taxmap__note">
-                Documentation and reconciliations ready for a compliance check,
-                and filing moved across to iTax.
-              </p>
+            <div className="taxmap__step">
+              <div className="taxmap__step-header">
+                <span className="taxmap__step-num">02</span>
+                <span className="taxmap__step-title">Review &amp; Audit</span>
+              </div>
+              <div className="taxmap__node">
+                <span className="taxmap__mark" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+                    <path d="M14 3.5V8h4" />
+                    <path d="m9 14.5 2 2 4-4.5" />
+                  </svg>
+                </span>
+                <h3 className="taxmap__title">Prepared and reviewed</h3>
+                <p className="taxmap__note">
+                  Each return is checked against primary ledgers and supporting records
+                  before submission, with rigorous audit trails preserved.
+                </p>
+              </div>
+            </div>
+
+            <Arrow />
+
+            <div className="taxmap__step">
+              <div className="taxmap__step-header">
+                <span className="taxmap__step-num">03</span>
+                <span className="taxmap__step-title">Statutory Filing</span>
+              </div>
+              <div className="taxmap__node">
+                <span className="taxmap__mark" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-2.5Z" />
+                    <path d="m9 12 2 2 4-4" />
+                  </svg>
+                </span>
+                <h3 className="taxmap__title">KRA compliance</h3>
+                <p className="taxmap__note">
+                  Documentation and reconciliations ready for statutory compliance
+                  checks, with official submissions executed across iTax.
+                </p>
+              </div>
             </div>
           </div>
         </Reveal>
