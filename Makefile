@@ -7,7 +7,7 @@ help:
 	@echo "  dev                 Start the dev server"
 	@echo "  build               Build for production"
 	@echo "  start               Start the production server"
-	@echo "  deploy             Build for production and push to origin main (triggers Render deploy)"
+	@echo "  deploy             Build, push to origin main, and trigger a Render deploy"
 	@echo "  lint                Run ESLint"
 	@echo "  typecheck           Run TypeScript type checking"
 	@echo "  check               Run lint + typecheck + tests"
@@ -34,9 +34,14 @@ build:
 start:
 	npm run start
 
+# The Render service this repository deploys to (see render.yaml). The Render
+# CLI must be installed and logged in (`render login`).
+RENDER_SERVICE_ID ?= srv-dbc7nqjbc2fs73bj27c0
+
 deploy:
 	npm run build
 	git push origin main
+	render deploys create $(RENDER_SERVICE_ID) --confirm
 
 lint:
 	npm run lint
