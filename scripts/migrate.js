@@ -41,9 +41,27 @@ function migrationFiles() {
     }));
 }
 
+// `pg` lets `sslmode` in the connection string override the explicit `ssl`
+// option below, and current versions treat `sslmode=require` as full
+// certificate verification. The Supabase pooler uses a self-signed
+// certificate, so the parameter is dropped here and SSL is configured by the
+// `ssl` option instead.
+function withoutSslParameters(connectionString) {
+  const queryIndex = connectionString.indexOf('?');
+  if (queryIndex === -1) return connectionString;
+
+  const base = connectionString.slice(0, queryIndex);
+  const kept = connectionString
+    .slice(queryIndex + 1)
+    .split('&')
+    .filter((param) => param && !/^(sslmode|ssl|uselibpqcompat)=/i.test(param));
+
+  return kept.length > 0 ? `${base}?${kept.join('&')}` : base;
+}
+
 async function main() {
   const client = new pg.Client({
-    connectionString: DATABASE_URL,
+    connectionString: withoutSslParameters(DATABASE_URL),
     ssl: { rejectUnauthorized: false },
   });
 

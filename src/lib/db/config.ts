@@ -28,6 +28,29 @@ function isPostgresUrl(value: string): boolean {
   return value.startsWith('postgres://') || value.startsWith('postgresql://');
 }
 
+/**
+ * Removes the SSL parameters that `pg` reads out of the connection string.
+ *
+ * `pg` parses `sslmode` from the URL and lets it override the explicit `ssl`
+ * option passed to the pool. In current versions of `pg-connection-string`
+ * `sslmode=require` means "verify the full certificate chain", which a pooler
+ * with a self-signed certificate (Supabase's Supavisor) cannot satisfy. SSL is
+ * still turned on by the `ssl` option in postgres.ts; only the URL parameter is
+ * dropped so it cannot override that option.
+ */
+function withoutSslParameters(connectionString: string): string {
+  const queryIndex = connectionString.indexOf('?');
+  if (queryIndex === -1) return connectionString;
+
+  const base = connectionString.slice(0, queryIndex);
+  const kept = connectionString
+    .slice(queryIndex + 1)
+    .split('&')
+    .filter((param) => param && !/^(sslmode|ssl|uselibpqcompat)=/i.test(param));
+
+  return kept.length > 0 ? `${base}?${kept.join('&')}` : base;
+}
+
 export function readDatabaseConfig(
   env: Record<string, string | undefined> = process.env
 ): DatabaseConfig {
@@ -58,7 +81,7 @@ export function readDatabaseConfig(
   const maxConnections = Number(env.DATABASE_POOL_SIZE ?? (pooled ? 10 : 5));
 
   return {
-    connectionString: raw,
+    connectionString: withoutSslParameters(raw),
     pooled,
     maxConnections: Number.isFinite(maxConnections) && maxConnections > 0 ? maxConnections : 5,
     ssl,

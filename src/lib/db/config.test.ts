@@ -37,6 +37,17 @@ describe('database configuration', () => {
     expect(config.pooled).toBe(true);
   });
 
+  it('does not let sslmode in the URL override the SSL setting', () => {
+    const config = readDatabaseConfig({
+      DATABASE_URL:
+        'postgresql://postgres.abc:secret@aws-0-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require&application_name=portfolio',
+    } as Record<string, string | undefined>);
+    expect(config.ssl).toBe(true);
+    expect(config.connectionString).not.toMatch(/sslmode/i);
+    expect(config.connectionString).toContain('application_name=portfolio');
+    expect(config.connectionString).toContain('pooler.supabase.com');
+  });
+
   it('allows SSL to be turned off for a local server', () => {
     const config = readDatabaseConfig({
       DATABASE_URL: 'postgresql://postgres@127.0.0.1:5432/portfolio?sslmode=disable',
