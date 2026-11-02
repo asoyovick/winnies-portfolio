@@ -1,12 +1,13 @@
 import Hero from '@/components/Hero';
 import About from '@/components/About';
-import Place from '@/components/Place';
 import Expertise from '@/components/Expertise';
+import Place from '@/components/Place';
 import TaxMap from '@/components/TaxMap';
 import Experience from '@/components/Experience';
 import Education from '@/components/Education';
 import Tools from '@/components/Tools';
 import Insights from '@/components/Insights';
+import Faq from '@/components/Faq';
 import Contact from '@/components/Contact';
 import { getExperience, getMediaAsset, getProfile } from '@/lib/content';
 import { assetPublicUrl } from '@/lib/storage';
@@ -63,13 +64,14 @@ export default async function Page() {
       />
       <Hero />
       <About />
-      <Place />
       <Expertise />
+      <Place />
       <TaxMap />
       <Experience />
       <Education />
       <Tools />
       <Insights />
+      <Faq />
       <Contact profile={profile} cvUrl={cvUrl} />
     </>
   );

@@ -14,15 +14,20 @@ export default async function Place() {
   const profile = await getProfile();
 
   return (
-    <section id="place" className="section section--alt" aria-labelledby="place-heading">
-      <div className="wrap">
+    <section id="place" className="w-section w-place" aria-labelledby="place-heading">
+      <div className="w-wrap">
         <Reveal>
-          <div className="place__head">
-            <span className="section-badge">Regional Presence</span>
-            <h2 id="place-heading" className="section__head">
-              Kisumu &amp; Western Kenya
-            </h2>
-            <p className="place__lead">
+          <div className="w-head-row">
+            <div>
+              <p className="w-eyebrow">
+                <span className="w-num">03</span>
+                <span>Where the work happens</span>
+              </p>
+              <h2 id="place-heading" className="w-head">
+                Kisumu &amp; <em>Western Kenya.</em>
+              </h2>
+            </div>
+            <p className="w-lead">
               The practice is based in Kisumu, on the shore of Lake Victoria.
               Work comes from NGOs, SACCOs and corporate businesses in the town
               and across the Western Kenya economic corridor.
@@ -31,76 +36,58 @@ export default async function Place() {
         </Reveal>
 
         <Reveal>
-          <div className="place__grid">
-            <figure className="place__figure place__figure--large">
-              <div className="place__frame">
+          <div className="w-place__grid">
+            <figure className="w-place__figure">
+              <div className="w-place__frame">
                 <Image
                   src="/images/kisumu-city.jpg"
                   alt="View across the green grounds of Kisumu towards the town centre and Lake Victoria."
                   width={1632}
                   height={1224}
-                  sizes="(max-width: 900px) 92vw, 62vw"
-                  className="place__image"
+                  sizes="(max-width: 860px) 92vw, 58vw"
+                  className="w-place__image"
                 />
               </div>
-              <figcaption className="place__caption">
-                <span className="place__caption-pill">Commercial Hub</span>
-                <span>Kisumu, with the lake behind the town. Victor Ochieng, CC BY-SA 2.0.</span>
+              <figcaption className="w-place__caption">
+                <span className="w-place__caption-label">Commercial hub</span>
+                Kisumu, with the lake behind the town. Victor Ochieng, CC BY-SA 2.0.
               </figcaption>
             </figure>
 
-            <figure className="place__figure place__figure--a">
-              <div className="place__frame">
-                <Image
-                  src="/images/kisumu-lake-landing.jpg"
-                  alt="Fishing boats moored at the landing sites on Lake Victoria at Kisumu."
-                  width={1920}
-                  height={1275}
-                  sizes="(max-width: 900px) 92vw, 40vw"
-                  className="place__image"
-                />
-              </div>
-              <figcaption className="place__caption">
-                <span className="place__caption-pill">Lake Basin</span>
-                <span>Landing sites on Lake Victoria. Josep M. Gracia, CC BY-SA 4.0.</span>
-              </figcaption>
-            </figure>
-
-            <figure className="place__figure place__figure--b">
-              <div className="place__frame">
-                <Image
-                  src="/images/kisumu-night.jpg"
-                  alt="A lit street in Kisumu at night with cars parked along the road."
-                  width={1920}
-                  height={1280}
-                  sizes="(max-width: 900px) 92vw, 50vw"
-                  className="place__image"
-                />
-              </div>
-              <figcaption className="place__caption">
-                <span className="place__caption-pill">Urban Center</span>
-                <span>Kisumu by evening. Victor Ochieng, CC BY-SA 2.0.</span>
-              </figcaption>
-            </figure>
-
-            <div className="place__facts-card">
-              <div className="place__facts-header">
-                <span className="place__facts-title">Regional Practice Profile</span>
-              </div>
-              <div className="place__facts">
-                <div className="place__fact">
-                  <span className="place__fact-label">Base of Operations</span>
-                  <span className="place__fact-value">{profile?.location || 'Kisumu, Kenya'}</span>
+            <div className="w-place__side">
+              <figure className="w-place__figure w-place__figure--small">
+                <div className="w-place__frame">
+                  <Image
+                    src="/images/kisumu-lake-landing.jpg"
+                    alt="Fishing boats moored at the landing sites on Lake Victoria at Kisumu."
+                    width={1920}
+                    height={1275}
+                    sizes="(max-width: 860px) 92vw, 36vw"
+                    className="w-place__image"
+                  />
                 </div>
-                <div className="place__fact">
-                  <span className="place__fact-label">Client Focus</span>
-                  <span className="place__fact-value">
-                    NGOs, SACCOs &amp; Corporate Enterprises
+                <figcaption className="w-place__caption">
+                  <span className="w-place__caption-label">Lake basin</span>
+                  Landing sites on Lake Victoria. Josep M. Gracia, CC BY-SA 4.0.
+                </figcaption>
+              </figure>
+
+              <div className="w-facts">
+                <div className="w-facts__row">
+                  <span className="w-facts__label">Practice base</span>
+                  <span className="w-facts__value">
+                    {profile?.location || 'Kisumu, Kenya'}
                   </span>
                 </div>
-                <div className="place__fact">
-                  <span className="place__fact-label">Core Scope</span>
-                  <span className="place__fact-value">
+                <div className="w-facts__row">
+                  <span className="w-facts__label">Client focus</span>
+                  <span className="w-facts__value">
+                    NGOs, SACCOs &amp; corporate enterprises
+                  </span>
+                </div>
+                <div className="w-facts__row">
+                  <span className="w-facts__label">Core scope</span>
+                  <span className="w-facts__value">
                     Tax compliance, statutory audits &amp; financial reporting
                   </span>
                 </div>

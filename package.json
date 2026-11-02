@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@fontsource/inter": "^5.2.0",
+    "@fontsource/playfair-display": "^5.3.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.12",

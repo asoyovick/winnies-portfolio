@@ -2,6 +2,13 @@ import { getExperience, formatDateRange } from '@/lib/content';
 import { parseJson } from '@/lib/validation';
 import { Reveal } from './Reveal';
 
+/**
+ * Experience.
+ *
+ * The CV laid into the editorial ledger: one row per position, organisation
+ * and dates printed small, role in the display serif, then the substance —
+ * description and responsibilities — under it.
+ */
 export default async function Experience() {
   const items = (await getExperience()).map((item) => ({
     ...item,
@@ -10,91 +17,68 @@ export default async function Experience() {
   }));
 
   return (
-    <section
-      id="experience"
-      className="section section--alt"
-      aria-labelledby="experience-heading"
-    >
-      <div className="wrap">
+    <section id="experience" className="w-section" aria-labelledby="experience-heading">
+      <div className="w-wrap">
         <Reveal>
-          <div className="section-head-wrap">
-            <span className="section-badge">Career &amp; Track Record</span>
-            <h2 id="experience-heading" className="section__head">
-              Experience
-            </h2>
-            <p className="section__lead">
-              Practical experience delivering audit, accounting and tax compliance
-              across established Kenyan organizations.
+          <div className="w-head-row">
+            <div>
+              <p className="w-eyebrow">
+                <span className="w-num">05</span>
+                <span>Where the numbers come from</span>
+              </p>
+              <h2 id="experience-heading" className="w-head">
+                Track record. <em>The organisations behind it.</em>
+              </h2>
+            </div>
+            <p className="w-lead">
+              Practical experience delivering audit, accounting and tax
+              compliance across established Kenyan organizations.
             </p>
           </div>
         </Reveal>
+
         <Reveal>
-          <div className="timeline" aria-label="Employment history">
-            <div className="timeline__axis" aria-hidden="true" />
+          <ul className="w-track__list">
             {items.map((item) => (
-              <article key={item.id} className="timeline__item">
-                <div className="timeline__marker" aria-hidden="true">
-                  <span className="timeline__marker-dot" />
+              <li key={item.id} className="w-track-item">
+                <div className="w-track-item__top">
+                  <span className="w-track-item__org">{item.organization}</span>
+                  {item.is_current ? (
+                    <span className="w-track-item__current">Current position</span>
+                  ) : null}
+                  <span className="w-track-item__dates">
+                    {formatDateRange(item)}
+                  </span>
                 </div>
-                <div className="timeline__card">
-                  <div className="timeline__card-header">
-                    <div>
-                      <div className="timeline__org-row">
-                        <span className="timeline__org">{item.organization}</span>
-                        {item.is_current ? (
-                          <span className="timeline__current-pill">Current Position</span>
-                        ) : null}
-                      </div>
-                      <h3 className="timeline__role">{item.position}</h3>
-                    </div>
-                    <span className="timeline__dates-pill">{formatDateRange(item)}</span>
+                <h3 className="w-track-item__role">{item.position}</h3>
+
+                {item.description ? (
+                  <p className="w-track-item__desc">{item.description}</p>
+                ) : null}
+
+                {item.responsibilities.length > 0 ? (
+                  <ul className="w-track-item__list">
+                    {item.responsibilities.map((responsibility, index) => (
+                      <li key={index}>{responsibility}</li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {item.achievements.length > 0 ? (
+                  <div>
+                    <p className="w-tag" style={{ marginTop: '1rem', display: 'inline-block' }}>
+                      Recognised impact
+                    </p>
+                    <ul className="w-track-item__list">
+                      {item.achievements.map((achievement, index) => (
+                        <li key={index}>{achievement}</li>
+                      ))}
+                    </ul>
                   </div>
-
-                  {item.description ? (
-                    <p className="timeline__description">{item.description}</p>
-                  ) : null}
-
-                  {item.responsibilities.length > 0 ? (
-                    <div className="timeline__section-block">
-                      <h4 className="timeline__subhead">Key Responsibilities</h4>
-                      <ul className="timeline__responsibilities">
-                        {item.responsibilities.map((responsibility, index) => (
-                          <li key={index} className="timeline__resp-item">
-                            <span className="timeline__check-icon" aria-hidden="true">
-                              <svg viewBox="0 0 20 20" fill="currentColor">
-                                <path
-                                  fillRule="evenodd"
-                                  d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                            </span>
-                            <span>{responsibility}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-
-                  {item.achievements.length > 0 ? (
-                    <div className="timeline__achievements">
-                      <div className="timeline__achievements-head">
-                        <span className="timeline__trophy-icon" aria-hidden="true">
-                          ★
-                        </span>
-                        <h4 className="timeline__achievements-label">Recognised Impact &amp; Milestones</h4>
-                      </div>
-                      <ul className="timeline__achievements-list">
-                        {item.achievements.map((achievement, index) => (
-                          <li key={index}>{achievement}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              </article>
+                ) : null}
+              </li>
             ))}
-          </div>
+          </ul>
         </Reveal>
       </div>
     </section>

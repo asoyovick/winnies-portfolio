@@ -1,6 +1,13 @@
 import { getProfile } from '@/lib/content';
 import { Reveal } from './Reveal';
 
+/**
+ * A note from Winnie.
+ *
+ * The opening section after the hero: who is writing, in her own words, and
+ * the three working values the practice rests on. It reads less like a sales
+ * page and more like the start of a working relationship.
+ */
 export default async function About() {
   const profile = await getProfile();
   const biography = (profile?.biography || '').trim();
@@ -9,44 +16,50 @@ export default async function About() {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  return (
-    <section id="about" className="section" aria-labelledby="about-heading">
-      <div className="wrap about__layout">
-        <div className="about__intro">
-          <Reveal>
-            <span className="section-badge">About the Practice</span>
-            <h2 id="about-heading" className="section__head">
-              About
-            </h2>
-            <p className="about__lead">
-              {profile?.display_name || 'Winnie Awuor Otieno'} is an accounting,
-              audit and tax professional based in {profile?.location || 'Kisumu, Kenya'}.
-            </p>
+  const first = paragraphs[0];
+  const rest = paragraphs.slice(1);
 
-            <div className="about__stat-cards">
-              <div className="about__stat-card">
-                <span className="about__stat-mark">CPA</span>
-                <span className="about__stat-text">Certified Public Accountant (Ongoing)</span>
-              </div>
-              <div className="about__stat-card">
-                <span className="about__stat-mark">B.Sc</span>
-                <span className="about__stat-text">Egerton University</span>
-              </div>
-              <div className="about__stat-card">
-                <span className="about__stat-mark">Regional</span>
-                <span className="about__stat-text">NGOs, SACCOs &amp; Corporates</span>
-              </div>
-            </div>
-          </Reveal>
-        </div>
+  return (
+    <section id="about" className="w-section w-note-section" aria-labelledby="about-heading">
+      <div className="w-wrap w-note-section__grid">
         <Reveal>
-          <div className="about__card">
-            <div className="about__card-accent" />
-            <div className="about__body">
-              {paragraphs.map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
+          <div>
+            <p className="w-eyebrow">
+              <span className="w-num">01</span>
+              <span>A note from Winnie</span>
+            </p>
+            <h2 id="about-heading" className="w-note-section__hello">
+              Hello, I&apos;m {((profile?.display_name || 'Winnie').split(' ')[0])}.
+            </h2>
+            {first ? <p className="w-lead">{first}</p> : null}
+          </div>
+        </Reveal>
+
+        <Reveal>
+          <div>
+            {rest.length > 0 ? (
+              <div className="w-note-section__body">
+                {rest.map((paragraph, index) => (
+                  <p key={index}>{paragraph}</p>
+                ))}
+              </div>
+            ) : null}
+
+            <ul className="w-note-section__values">
+              <li className="w-note-section__value">
+                <span className="w-tag">Compliance</span>
+                Tax returns filed carefully, checked against the records behind
+                them.
+              </li>
+              <li className="w-note-section__value">
+                <span className="w-tag">Audit</span>
+                Financial audits carried out with a tax view of the numbers.
+              </li>
+              <li className="w-note-section__value">
+                <span className="w-tag">Reporting</span>
+                Accounting and reporting explained in plain language, always.
+              </li>
+            </ul>
           </div>
         </Reveal>
       </div>

@@ -1,63 +1,74 @@
 import { getExpertise } from '@/lib/content';
 import { Reveal } from './Reveal';
 
+/**
+ * How I can help.
+ *
+ * The practice areas are read from the database where Winnie keeps them, and
+ * presented as a numbered ledger: one line per service, title on the left,
+ * description on the right, with the group each one belongs to as a small
+ * printed tag.
+ */
 export default async function Expertise() {
   const items = await getExpertise();
 
-  // Group by category so related expertise sits together under a plain
-  // group label (the blueprint's "group separated by a plain word").
-  const groups: Record<string, typeof items> = {};
-  items.forEach((item) => {
-    const key = item.category || 'General';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(item);
-  });
-
   return (
-    <section id="expertise" className="section" aria-labelledby="expertise-heading">
-      <div className="wrap">
+    <section id="expertise" className="w-section" aria-labelledby="expertise-heading">
+      <div className="w-wrap">
         <Reveal>
-          <div className="expertise__head">
+          <div className="w-services__head">
             <div>
-              <span className="section-badge">Core Practice Areas</span>
-              <h2 id="expertise-heading" className="section__head">
-                Expertise
+              <p className="w-eyebrow">
+                <span className="w-num">02</span>
+                <span>How I can help</span>
+              </p>
+              <h2 id="expertise-heading" className="w-head">
+                Support for the everyday.
+                <br />
+                <em>Insight for the next step.</em>
               </h2>
             </div>
-            <p className="expertise__lead">
-              Structured financial advisory and rigorous statutory compliance
-              tailored to Kenyan regulatory frameworks.
-            </p>
+            <div>
+              <p className="w-lead">
+                Structured financial advisory and rigorous statutory compliance
+                for organisations working in Kenya — the routine done properly,
+                and a view of what the numbers mean.
+              </p>
+              <div className="w-services__head-actions">
+                <a href="#contact" className="w-btn">
+                  <span>Discuss your needs</span>
+                  <span className="w-btn__arrow" aria-hidden="true">
+                    ↗
+                  </span>
+                </a>
+                <span className="w-note">No obligation. A scope is agreed together.</span>
+              </div>
+            </div>
           </div>
         </Reveal>
+
         <Reveal>
-          <div className="expertise__grid">
-            {Object.entries(groups).map(([category, groupItems]) => (
-              <div key={category} className="expertise__card">
-                <div className="expertise__card-head">
-                  <div className="expertise__badge-wrap">
-                    <span className="expertise__card-icon">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </span>
-                    <h3 className="expertise__group-label">{category}</h3>
-                  </div>
-                  <span className="expertise__count-pill">
-                    {groupItems.length} {groupItems.length === 1 ? 'service' : 'services'}
-                  </span>
+          <ul className="w-services__list">
+            {items.map((item, index) => (
+              <li key={item.id} className="w-service">
+                <span className="w-service__num">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className="w-service__title">{item.title}</h3>
+                <div className="w-service__desc">
+                  <p>{item.description}</p>
+                  {item.category ? (
+                    <p className="w-service__tags">
+                      <span className="w-tag">{item.category}</span>
+                    </p>
+                  ) : null}
                 </div>
-                <div className="expertise__items">
-                  {groupItems.map((item) => (
-                    <div key={item.id} className="expertise__row">
-                      <h4 className="expertise__title">{item.title}</h4>
-                      <p className="expertise__desc">{item.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                <span className="w-service__arrow" aria-hidden="true">
+                  ↗
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </Reveal>
       </div>
     </section>

@@ -4,8 +4,9 @@ import { Reveal } from './Reveal';
  * A drawn map of the work: the returns she prepares, what they are checked
  * against, and where they end up.
  *
- * It is drawn in code rather than photographed, so it stays sharp at any size,
- * carries no third-party rights, and says something true about the practice.
+ * It is set out like a working paper — the statement on the dark band, the
+ * detail printed on a cream card on top of it — so the page keeps the
+ * editorial rhythm of the design: dark chapter, then a quiet, factual card.
  */
 const TAXES = [
   { label: 'VAT', note: 'Monthly return' },
@@ -14,103 +15,83 @@ const TAXES = [
   { label: 'Corporation tax', note: 'Annual return' },
 ];
 
-function Arrow() {
-  return (
-    <span className="taxmap__arrow" aria-hidden="true">
-      <svg viewBox="0 0 48 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M0 6h44M39 1l5 5-5 5" />
-      </svg>
-    </span>
-  );
-}
+const STEPS = [
+  {
+    label: 'The returns',
+    value:
+      'The four recurring returns: VAT, PAYE, withholding tax and corporation tax, each on its own statutory hairline of dates.',
+  },
+  {
+    label: 'The check',
+    value:
+      'Every return is checked against primary ledgers and supporting records before submission, with audit trails preserved.',
+  },
+  {
+    label: 'The filing',
+    value:
+      'Submissions are executed on iTax and filed away with the reconciliations behind them, ready for any future review.',
+  },
+];
 
 export default function TaxMap() {
   return (
-    <section className="section section--dark" aria-labelledby="taxmap-heading">
-      <div className="wrap">
+    <section className="w-section w-dark" aria-labelledby="taxmap-heading">
+      <div className="w-wrap w-look__grid">
         <Reveal>
-          <div className="taxmap__head">
-            <span className="section-badge section-badge--light">Statutory Workflow</span>
-            <h2 id="taxmap-heading" className="section__head">
-              How a return gets done
-            </h2>
-            <p className="taxmap__lead">
-              The four returns she prepares, what each one is checked against, and
-              where it ends up.
+          <div>
+            <p className="w-eyebrow">
+              <span className="w-num">04</span>
+              <span>A closer look — the statutory month</span>
             </p>
+            <h2 id="taxmap-heading" className="w-head w-look__head">
+              How a return
+              <br />
+              gets done.
+            </h2>
+            <p className="w-look__lead">
+              Statutory filings reward rhythm: the same records, the same
+              checks, the same places every period. Three questions carry the
+              month.
+            </p>
+            <div className="w-look__rows">
+              {STEPS.map((step) => (
+                <div key={step.label} className="w-look__row">
+                  <span className="w-look__row-label">{step.label}</span>
+                  <span className="w-look__row-value">{step.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </Reveal>
 
         <Reveal>
-          <div className="taxmap">
-            <div className="taxmap__step">
-              <div className="taxmap__step-header">
-                <span className="taxmap__step-num">01</span>
-                <span className="taxmap__step-title">Source Filings</span>
-              </div>
-              <ul className="taxmap__sources">
-                {TAXES.map((tax) => (
-                  <li key={tax.label} className="taxmap__source">
-                    <span className="taxmap__source-label">{tax.label}</span>
-                    <span className="taxmap__source-note">{tax.note}</span>
-                  </li>
-                ))}
-              </ul>
+          <div className="w-card">
+            <div className="w-card__head">
+              <h3 className="w-card__title">The filing sheet</h3>
+              <span className="w-card__meta">
+                Statutory returns
+                <br />
+                Standing schedule
+              </span>
             </div>
 
-            <Arrow />
+            <ul className="w-card__rows">
+              {TAXES.map((tax) => (
+                <li key={tax.label} className="w-card__row">
+                  <span className="w-card__row-text">
+                    <span className="w-card__row-title">{tax.label}</span>
+                    <span className="w-card__row-note">{tax.note}</span>
+                  </span>
+                  <span className="w-card__row-state">{tax.label === 'Corporation tax' ? 'On schedule' : 'Reconciled'}</span>
+                </li>
+              ))}
+            </ul>
 
-            <div className="taxmap__step">
-              <div className="taxmap__step-header">
-                <span className="taxmap__step-num">02</span>
-                <span className="taxmap__step-title">Review &amp; Audit</span>
-              </div>
-              <div className="taxmap__node">
-                <span className="taxmap__mark" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M7 3.5h7l4 4V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
-                    <path d="M14 3.5V8h4" />
-                    <path d="m9 14.5 2 2 4-4.5" />
-                  </svg>
-                </span>
-                <h3 className="taxmap__title">Prepared and reviewed</h3>
-                <p className="taxmap__note">
-                  Each return is checked against primary ledgers and supporting records
-                  before submission, with rigorous audit trails preserved.
-                </p>
-              </div>
-            </div>
-
-            <Arrow />
-
-            <div className="taxmap__step">
-              <div className="taxmap__step-header">
-                <span className="taxmap__step-num">03</span>
-                <span className="taxmap__step-title">Statutory Filing</span>
-              </div>
-              <div className="taxmap__node">
-                <span className="taxmap__mark" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M12 3.5 5 6v5.5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-2.5Z" />
-                    <path d="m9 12 2 2 4-4" />
-                  </svg>
-                </span>
-                <h3 className="taxmap__title">KRA compliance</h3>
-                <p className="taxmap__note">
-                  Documentation and reconciliations ready for statutory compliance
-                  checks, with official submissions executed across iTax.
-                </p>
-              </div>
+            <div className="w-card__foot">
+              <span className="w-card__caption">Everything in its date.</span>
+              <span className="w-card__foot-note">
+                Every figure traceable · every filing dated
+              </span>
             </div>
           </div>
         </Reveal>
